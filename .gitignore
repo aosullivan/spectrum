@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code — worktrees/ holds live git worktree metadata, never commit it
+/.claude/worktrees/
+/.claude/settings.local.json
