@@ -19,6 +19,7 @@ const LS_KEY = "spectrum-studio:source-v1";
 
 export function Studio() {
   const [source, setSource] = useState<string>(DEFAULT_C_SOURCE);
+  const [showEditor, setShowEditor] = useState(false);
   const [status, setStatus] = useState<CompileStatus>("idle");
   const [message, setMessage] = useState<string>("Ready. Hit Compile & Run.");
   const emulatorRef = useRef<EmulatorHandle | null>(null);
@@ -93,26 +94,40 @@ export function Studio() {
       <Toolbar
         status={status}
         message={message}
+        showEditor={showEditor}
         onCompile={compile}
         onReset={reset}
+        onToggleEditor={() => setShowEditor((v) => !v)}
       />
 
+      {/* Every Panel keeps a stable key so toggling the editor reorders the
+          children without remounting the emulator and killing the running game. */}
       <Group orientation="horizontal" className="flex-1">
-        <Panel defaultSize="42%" minSize="25%">
-          <div className="h-full bg-[#1e1e1e]">
-            <CodeEditor value={source} onChange={setSource} onCompile={compile} />
-          </div>
-        </Panel>
+        {showEditor && (
+          <Panel key="editor" defaultSize="38%" minSize="25%">
+            <div className="h-full bg-[#1e1e1e]">
+              <CodeEditor value={source} onChange={setSource} onCompile={compile} />
+            </div>
+          </Panel>
+        )}
 
-        <Separator className="w-px bg-zinc-800 hover:bg-amber-500/40 data-[dragging=true]:bg-amber-500/70" />
+        {showEditor && (
+          <Separator
+            key="editor-sep"
+            className="w-px bg-zinc-800 hover:bg-amber-500/40 data-[dragging=true]:bg-amber-500/70"
+          />
+        )}
 
-        <Panel defaultSize="33%" minSize="20%">
+        <Panel key="emulator" defaultSize={showEditor ? "37%" : "70%"} minSize="20%">
           <Emulator ref={emulatorRef} />
         </Panel>
 
-        <Separator className="w-px bg-zinc-800 hover:bg-amber-500/40 data-[dragging=true]:bg-amber-500/70" />
+        <Separator
+          key="chat-sep"
+          className="w-px bg-zinc-800 hover:bg-amber-500/40 data-[dragging=true]:bg-amber-500/70"
+        />
 
-        <Panel defaultSize="25%" minSize="18%">
+        <Panel key="chat" defaultSize={showEditor ? "25%" : "30%"} minSize="18%">
           <Chat onApplyCode={applyCode} currentSource={source} />
         </Panel>
       </Group>

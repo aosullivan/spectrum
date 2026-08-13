@@ -1,6 +1,13 @@
 "use client";
 
-import { Play, RotateCcw, Loader2, CircleAlert, CircleCheck } from "lucide-react";
+import {
+  Play,
+  RotateCcw,
+  Loader2,
+  CircleAlert,
+  CircleCheck,
+  Code2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type CompileStatus = "idle" | "compiling" | "ok" | "error";
@@ -8,11 +15,20 @@ export type CompileStatus = "idle" | "compiling" | "ok" | "error";
 type Props = {
   status: CompileStatus;
   message: string;
+  showEditor: boolean;
   onCompile: () => void;
   onReset: () => void;
+  onToggleEditor: () => void;
 };
 
-export function Toolbar({ status, message, onCompile, onReset }: Props) {
+export function Toolbar({
+  status,
+  message,
+  showEditor,
+  onCompile,
+  onReset,
+  onToggleEditor,
+}: Props) {
   return (
     <div className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-4 py-2">
       <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-100">
@@ -49,6 +65,21 @@ export function Toolbar({ status, message, onCompile, onReset }: Props) {
       >
         <RotateCcw className="h-3.5 w-3.5" />
         Reset
+      </button>
+
+      <button
+        onClick={onToggleEditor}
+        aria-pressed={showEditor}
+        className={cn(
+          "flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs",
+          showEditor
+            ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:border-amber-500/60"
+            : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-100",
+        )}
+        title={showEditor ? "Hide the C source" : "Show the C source"}
+      >
+        <Code2 className="h-3.5 w-3.5" />
+        Code
       </button>
 
       <div

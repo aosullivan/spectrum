@@ -20,9 +20,13 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* JSSpeccy injects its own UI; make sure it sits cleanly on dark background. */
+/* JSSpeccy injects its own UI and hard-codes its pixel size inline from an
+   integer zoom, so the fit is driven by setZoom() in Emulator.tsx rather than
+   from here. These rules only stop it bleeding out of its pane. */
 .jsspeccy-host {
   display: inline-block;
+  max-width: 100%;
+  max-height: 100%;
 }
 .jsspeccy-host canvas {
   display: block;

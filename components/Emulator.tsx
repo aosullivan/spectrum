@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  forwardRef,
+} from "react";
 
 // Mirrors the object literal returned by window.JSSpeccy(). Note there is no
 // reset() on the public API — the bundle keeps that on its internal emulator
@@ -55,18 +61,54 @@ function loadJSSpeccy(): Promise<void> {
   return scriptLoaded;
 }
 
+// The Spectrum screen is 320x240; JSSpeccy wraps it in a menu bar and a status
+// bar and hard-codes the resulting pixel size inline from an integer zoom, so
+// CSS alone cannot make it fit. Pick the largest zoom that still fits instead.
+const SCREEN_W = 320;
+const SCREEN_H = 240;
+const CHROME_H = 60;
+const PADDING = 32;
+
+function fittingZoom(el: HTMLElement): number {
+  const w = el.clientWidth - PADDING;
+  const h = el.clientHeight - PADDING - CHROME_H;
+  const z = Math.floor(Math.min(w / SCREEN_W, h / SCREEN_H));
+  return Math.max(1, Math.min(4, Number.isFinite(z) ? z : 1));
+}
+
 export const Emulator = forwardRef<EmulatorHandle>(function Emulator(_, ref) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<JSSpeccyInstance | null>(null);
   const lastUrlRef = useRef<string | null>(null);
+  const zoomRef = useRef<number>(0);
+
+  const fitToPane = useCallback(() => {
+    const el = containerRef.current;
+    const inst = instanceRef.current;
+    if (!el || !inst) return;
+    const z = fittingZoom(el);
+    if (z === zoomRef.current) return;
+    zoomRef.current = z;
+    inst.setZoom(z);
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(fitToPane);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitToPane]);
 
   useEffect(() => {
     let cancelled = false;
     loadJSSpeccy()
       .then(() => {
-        if (cancelled || !hostRef.current || !window.JSSpeccy) return;
+        if (cancelled || !hostRef.current || !containerRef.current || !window.JSSpeccy)
+          return;
         instanceRef.current = window.JSSpeccy(hostRef.current, {
-          zoom: 2,
+          zoom: fittingZoom(containerRef.current),
           machine: 48,
           autoStart: true,
           // Defaults to false, which inserts the tape but leaves the Spectrum
@@ -75,6 +117,7 @@ export const Emulator = forwardRef<EmulatorHandle>(function Emulator(_, ref) {
           sandbox: true,
           keyboardEnabled: true,
         });
+        zoomRef.current = fittingZoom(containerRef.current);
       })
       .catch((err) => {
         console.error(err);
@@ -109,7 +152,10 @@ export const Emulator = forwardRef<EmulatorHandle>(function Emulator(_, ref) {
   }));
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-black p-4">
+    <div
+      ref={containerRef}
+      className="flex h-full w-full items-center justify-center overflow-hidden bg-black p-4"
+    >
       <div
         ref={hostRef}
         className="jsspeccy-host max-w-full"
