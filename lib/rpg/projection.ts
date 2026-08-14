@@ -52,6 +52,8 @@ export interface Billboard {
   elevate?: number;
   /** Body radius in world units; omitted props can be walked through. */
   solid?: number;
+  /** Radius in world units over which this prop throws warm light. */
+  light?: number;
   /** Cycled at `fps` when present, for flame flicker and the like. */
   frames?: readonly Sprite[];
   fps?: number;

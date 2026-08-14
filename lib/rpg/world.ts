@@ -20,7 +20,7 @@ import {
   TREE_PINE_LIVE,
   TRILITHON,
 } from "@/lib/rpg/flora";
-import { B, BB, BC, BG, C, G, K } from "@/lib/rpg/palette";
+import { B, BB, BC, BG, C, G, K, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 
@@ -109,23 +109,42 @@ export function groundColour(
     }
   }
 
-  // --- grass tufts; both woodlands pack them denser than the open moor ---
   const woods = wx < WOODS_EDGE_X;
   const greenwood = wx > GREENWOOD_EDGE_X;
-  const cell = woods || greenwood ? 7 : 11;
+
+  // --- undergrowth: a dithered mat of living ground, laid down first ---
+  // The moor and greenwood should read as carpeted, not as bare earth with
+  // a few dashes on it. The old forest is exempt: it is dying.
+  if (!woods) {
+    const bed = hash(ix >> 1, iy >> 1);
+    const cover = greenwood ? 330 : 195;
+    if (bed < cover && (ix + iy) % 2 === 0) {
+      return bed < cover / 7 ? BG : G;
+    }
+  }
+
+  // --- and clumps of taller growth standing proud of the mat ---
+  const cell = woods ? 7 : greenwood ? 5 : 8;
   const tx = Math.floor(wx / cell);
   const ty = Math.floor(wy / cell);
   const th = hash(tx, ty);
   // The old forest is dying: barely any ground cover left under it.
-  const lively = woods ? 90 : greenwood ? 560 : 170;
-  const density = footprint > 9 ? 25 : footprint > 3 ? 70 : lively;
+  const lively = woods ? 90 : greenwood ? 500 : 340;
+  const density = footprint > 9 ? 25 : footprint > 3 ? 90 : lively;
   if (th < (footprint <= 3 ? lively : density)) {
     const px = tx * cell + (th % cell);
     const py = ty * cell + ((th >> 4) % cell);
     const dx = ix - px;
     const dy = iy - py;
-    if (dy === 0 && dx >= -1 && dx <= 1) return greenwood && th < 60 ? BG : G;
-    if (dy === -1 && dx === 0) return G;
+    const bright = th < (greenwood ? 90 : 50);
+    if (dy === 0 && dx >= -2 && dx <= 2) return bright ? BG : G;
+    if (dy === -1 && dx >= -1 && dx <= 1) return G;
+    if (dy === -2 && dx === 0) return bright ? BG : G;
+  }
+
+  // --- loose stones scattered through it ---
+  if (!woods && hash(ix >> 2, iy >> 2) < 5 && (ix & 3) < 2 && (iy & 3) < 2) {
+    return W;
   }
 
   // --- faint world-anchored contour dashes tie the ground together ---
@@ -256,10 +275,10 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   const woods = baseX < WOODS_EDGE_X;
   const greenwood = baseX > GREENWOOD_EDGE_X;
   // A stand per wooded chunk, the odd lone tree out on the open moor.
-  const treeRolls = woods || greenwood ? 3 : 1;
+  const treeRolls = greenwood ? 5 : woods ? 4 : 1;
   for (let i = 0; i < treeRolls; i++) {
     const h = hash(cx * 5 + i, cy * 7 + i * 3);
-    if (h < (woods || greenwood ? 700 : 90)) {
+    if (h < (greenwood ? 690 : woods ? 620 : 90)) {
       const kind = h % 5;
       const living = greenwood
         ? kind < 2
@@ -282,14 +301,16 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   }
   // Bracken and scrub, only where things still grow.
   if (greenwood) {
-    const sh = hash(cx ^ 0x51ed, cy ^ 0x2f9a);
-    if (sh < 620) {
-      out.push({
-        x: baseX + (sh % CHUNK),
-        y: baseY + ((sh >> 5) % CHUNK),
-        sprite: BUSH,
-        height: 12 + (sh % 3) * 3,
-      });
+    for (let i = 0; i < 3; i++) {
+      const sh = hash((cx ^ 0x51ed) + i * 31, cy ^ 0x2f9a);
+      if (sh < 760) {
+        out.push({
+          x: baseX + (sh % CHUNK),
+          y: baseY + ((sh >> 5) % CHUNK),
+          sprite: BUSH,
+          height: 11 + (sh % 4) * 3,
+        });
+      }
     }
   }
   // Boulders and lone stones, sparse everywhere.
