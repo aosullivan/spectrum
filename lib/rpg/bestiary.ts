@@ -1,7 +1,7 @@
 // The bestiary: everything alive in the world that is not the player.
 // String bitmaps, one char per pixel, '.' transparent — the agreed format.
 
-import { BC, BR, BW, BY, C, G, K, M, R, W, Y } from "@/lib/rpg/palette";
+import { BC, BG, BR, BW, BY, C, G, K, M, R, W, Y } from "@/lib/rpg/palette";
 import { sprite } from "@/lib/rpg/screen";
 
 /**
@@ -244,4 +244,103 @@ export const POOL_RIPPLE = sprite(
     "....cccccccc....",
   ],
   { c: BC },
+);
+
+/**
+ * A bent hermit of the greenwood, leaning on a crooked staff.
+ * (14x24)
+ */
+export const NPC_HERMIT = sprite(
+  [
+    "......gggg....",
+    ".....gggggg...",
+    "....ggwwwwg...",
+    "s...ggwkkwg...",
+    ".s..ggwwwwg...",
+    "..s..gggggg...",
+    "..s..gggggg...",
+    "...s.hgggggg..",
+    "...s.gggggggg.",
+    "...sggggggggg.",
+    "...sggggggggg.",
+    "...sgggggggggg",
+    "...gggggggggg.",
+    "...sgggggggg..",
+    "...sggggggggg.",
+    "...sgggggggggg",
+    "...sggggggggg.",
+    "...s.gggggggg.",
+    "...s.gggggggg.",
+    "...s..gggggg..",
+    "...s..gggggg..",
+    "...s..ggg.ggg.",
+    "......ggg.ggg.",
+    ".....gggg.ggg.",
+  ],
+  { g: G, h: BG, w: W, k: K, s: W },
+);
+
+/**
+ * The ghost of a knight, still in his ruined helm, one arm
+ * raised in warning. You can see the wall through his ribs.
+ * (14x24)
+ */
+export const NPC_SHADE = sprite(
+  [
+    "......cccc....",
+    ".....ccbbcc...",
+    ".....cbkkbc...",
+    ".....cbkkbc...",
+    ".....ccbbcc...",
+    "......cccc....",
+    "..b....cc.....",
+    "..bc..cccc....",
+    "..bc.cc..cc...",
+    "..bcccc..cccc.",
+    "..bcc.c..c.cc.",
+    "...ccc.cc.ccc.",
+    "...c.c.cc.c.c.",
+    "...ccc.cc.ccc.",
+    "....c..cc..c..",
+    "....ccccccc...",
+    "....c.c.c.c...",
+    "....ccc.ccc...",
+    "....c.c.c.c...",
+    "....ccc.ccc...",
+    "....c.....c...",
+    "...cc.....cc..",
+    "...c.......c..",
+    "..cc.......cc.",
+  ],
+  { c: C, b: BC, k: K },
+);
+
+/**
+ * A seated seer, hood down, a small ley-light cupped in her hands.
+ * (14x20)
+ */
+export const NPC_SEER = sprite(
+  [
+    ".....mmmm.....",
+    "....mmmmmm....",
+    "....mmwwmm....",
+    "....mmmmmm....",
+    ".....mmmm.....",
+    "....mmmmmm....",
+    "...mmmmmmmm...",
+    "..mmmmmmmmmm..",
+    "..mmmm..mmmm..",
+    "..mmm.cc.mmm..",
+    "..mmm.cwc.mm..",
+    "..mmmccwccmm..",
+    "..mmmmcccmmm..",
+    ".mmmmmmmmmmmm.",
+    ".mmmmmmmmmmmm.",
+    "mmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmm",
+    ".mmmmmmmmmmmm.",
+    "..mmmmmmmmmm..",
+  ],
+  { m: M, w: BW, c: BC },
 );

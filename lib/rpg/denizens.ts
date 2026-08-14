@@ -8,6 +8,7 @@ import {
   GHOUL,
   GOBLIN,
   ORC,
+  NPC_HERMIT,
   SPIDER,
   WATER_SPIRIT,
 } from "@/lib/rpg/bestiary";
@@ -105,6 +106,31 @@ export const DENIZENS: Denizen[] = [
       lines: [
         "STAND STILL A MOMENT. THERE - DID YOU HEAR IT? SPIDERS. THEY HUNT THE HOLLOWS AT NIGHT.",
         "THE WYRM TO THE WEST WILL NOT HARM YOU. IT IS LONELY, AND IT TALKS. THAT IS ALL IT DOES NOW.",
+      ],
+    },
+  }),
+
+  // A hermit keeping his own company between the grove and the henge.
+  denizen({
+    id: "hermit",
+    originX: 640,
+    originY: 610,
+    roamX: 18,
+    roamY: 12,
+    rate: 0.15,
+    phase: 1.4,
+    hostile: false,
+    sprite: NPC_HERMIT,
+    height: 27,
+    reach: 42,
+    label: "SPEAK TO THE HERMIT",
+    interaction: {
+      kind: "talk",
+      name: "THE HERMIT",
+      lines: [
+        "EH? OH. YOU ARE ONE OF THE LEY-WALKERS. WE USED TO GET A LOT OF YOU.",
+        "THE STONES EAST OF HERE WERE RAISED TO HOLD SOMETHING DOWN, NOT TO MARK A GRAVE. MIND THAT.",
+        "IF YOU MEET THE WYRM, BE POLITE. IT IS OLDER THAN THE STONES AND IT HAS MANNERS.",
       ],
     },
   }),

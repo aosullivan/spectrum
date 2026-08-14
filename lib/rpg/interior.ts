@@ -3,7 +3,8 @@
 // corner posts rather than filled texture — so a chamber reads like the
 // keep's facade seen from the inside.
 
-import { GEM_FULL, WRAITH } from "@/lib/rpg/assets";
+import { NPC_SEER, NPC_SHADE } from "@/lib/rpg/bestiary";
+import { EXIT_ARCH, ITEM_KEY, ITEM_TORC } from "@/lib/rpg/items";
 import { BC, BW, C, K, W } from "@/lib/rpg/palette";
 import type { Actor } from "@/lib/rpg/interact";
 import {
@@ -101,14 +102,14 @@ export const KEEP_INTERIOR: Interior = {
   ],
   actors: [
     {
-      ...at(6, 8.55, INNER_ARCH, 70),
+      ...at(6, 8.7, EXIT_ARCH, 82),
       id: "keep-exit",
-      reach: 46,
+      reach: 60,
       label: "LEAVE THE KEEP",
       interaction: { kind: "exit" },
     },
     {
-      ...at(3.1, 5.5, WRAITH, 30),
+      ...at(3.1, 5.5, NPC_SHADE, 30),
       id: "keep-shade",
       reach: 42,
       label: "SPEAK TO THE SHADE",
@@ -123,7 +124,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(9.1, 5.9, GEM_FULL, 12),
+      ...at(9.1, 5.9, ITEM_TORC, 13),
       id: "keep-torc",
       reach: 34,
       label: "TAKE THE TORC",
@@ -131,6 +132,32 @@ export const KEEP_INTERIOR: Interior = {
         kind: "pickup",
         item: "TORC",
         onTake: "YOU TAKE THE TORC. IT IS WARM, AND IT HUMS LIKE A STRUCK WIRE.",
+      },
+    },
+    {
+      ...at(4.6, 1.6, NPC_SEER, 26),
+      id: "keep-seer",
+      reach: 40,
+      label: "SPEAK TO THE SEER",
+      interaction: {
+        kind: "talk",
+        name: "THE SEER",
+        lines: [
+          "I SAT DOWN HERE TO READ THE WATER AND I HAVE NOT STOOD UP SINCE. THAT WAS SOME TIME AGO.",
+          "THE FONT SHOWS WHAT THE LEY REMEMBERS. IT REMEMBERS A DRAGON, AND IT REMEMBERS A KING.",
+          "THERE IS A KEY IN THE EAST ALCOVE. I HAVE NO USE FOR DOORS.",
+        ],
+      },
+    },
+    {
+      ...at(10.2, 4.7, ITEM_KEY, 15),
+      id: "keep-key",
+      reach: 34,
+      label: "TAKE THE IRON KEY",
+      interaction: {
+        kind: "pickup",
+        item: "IRON KEY",
+        onTake: "AN OLD IRON KEY, COLD AS THE FLOOR IT LAY ON. SOMETHING HERE STILL LOCKS.",
       },
     },
   ],
