@@ -120,18 +120,21 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
 
 function drawHero(s: Screen, t: number): void {
   const bob = Math.round(Math.sin(t * 2.1) * 2);
-  const x = 128 - HERO.w; // scale 2 -> width 2*w, centred
+  // Authored at final size, so scale 1 — upscaling a small sprite is what
+  // made the old hero read as 2x2 blocks.
+  const x = 128 - (HERO.w >> 1);
   const y = 84 + bob;
-  s.blit(HERO, x, y, 2);
-  // Ley-glow pooling beneath the trailing wisp.
-  for (let gy = 145; gy < 151; gy++) {
-    const pw = gy - 141;
+  // Ley-glow pools on the ground UNDER the mage, so it goes down first —
+  // drawn after, it washed over the robe.
+  for (let gy = 146; gy < 152; gy++) {
+    const pw = (gy - 144) * 2;
     for (let gx = 128 - pw; gx <= 128 + pw; gx++) {
       if (((gx + gy) & 1) === 0) {
-        s.px(gx, gy + (bob >> 1), Math.abs(gx - 128) < 2 ? BC : C);
+        s.px(gx, gy, Math.abs(gx - 128) < 3 ? BC : C);
       }
     }
   }
+  s.blit(HERO, x, y, 1);
 }
 
 // ---------------------------------------------------------------------- HUD
