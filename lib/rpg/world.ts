@@ -4,9 +4,6 @@
 // (authored biome data arrives with the first dungeon milestone).
 
 import {
-  KEEP_FAR,
-  KEEP_MID,
-  KEEP_NEAR,
   MENHIR,
   STONE_LEANING,
   TREE_DEAD_PINE,
@@ -25,6 +22,7 @@ import {
 } from "@/lib/rpg/flora";
 import { B, BB, BC, BG, C, G, K } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
+import type { Box } from "@/lib/rpg/structures";
 
 // ------------------------------------------------------------------- places
 
@@ -158,26 +156,53 @@ const CHUNK = 96;
 const chunkCache = new Map<string, Feature[]>();
 
 /**
- * The keep swaps art as it grows on screen: a horizon silhouette becomes a
- * readable castle becomes a facade with a walk-in gate. Ordered best-first
- * by the on-screen pixel height at which each level takes over.
+ * The keep, as masonry rather than a poster: two towers, a curtain wall,
+ * and a gatehouse built from two piers under a lintel — so the archway is
+ * a real hole you can see through and fly into.
  */
-const KEEP_LOD = [
-  { minH: 34, sprite: KEEP_NEAR },
-  { minH: 15, sprite: KEEP_MID },
-  { minH: 0, sprite: KEEP_FAR },
-] as const;
+export const KEEP_BOXES: readonly Box[] = [
+  { x: KEEP_POS.x - 72, y: KEEP_POS.y, w: 48, d: 48, base: 0, top: 120 },
+  { x: KEEP_POS.x + 72, y: KEEP_POS.y, w: 48, d: 48, base: 0, top: 104 },
+  { x: KEEP_POS.x, y: KEEP_POS.y + 6, w: 150, d: 28, base: 0, top: 76 },
+  { x: KEEP_POS.x - 27, y: KEEP_POS.y - 14, w: 26, d: 46, base: 0, top: 98 },
+  { x: KEEP_POS.x + 27, y: KEEP_POS.y - 14, w: 26, d: 46, base: 0, top: 98 },
+  { x: KEEP_POS.x, y: KEEP_POS.y - 14, w: 80, d: 46, base: 74, top: 98 },
+  // Crenellations: a merlon is just a small box on a parapet. The gap on
+  // the right tower is where the crown came down.
+  ...crenellate(KEEP_POS.x - 72, KEEP_POS.y, 48, 48, 120, 5),
+  ...crenellate(KEEP_POS.x + 72, KEEP_POS.y, 48, 48, 104, 5).filter(
+    (_, i) => i !== 1 && i !== 4,
+  ),
+  ...crenellate(KEEP_POS.x, KEEP_POS.y + 6, 150, 28, 76, 11),
+  ...crenellate(KEEP_POS.x, KEEP_POS.y - 14, 80, 46, 98, 6),
+];
 
-/** The fixed, hand-placed world: the keep and the stone circle. */
+/** Merlons along the top of a box: the tooth-and-gap of a battlement. */
+function crenellate(
+  cx: number,
+  cy: number,
+  w: number,
+  d: number,
+  top: number,
+  count: number,
+): Box[] {
+  const out: Box[] = [];
+  const pitch = w / count;
+  for (let i = 0; i < count; i += 2) {
+    out.push({
+      x: cx - w / 2 + pitch * (i + 0.5),
+      y: cy,
+      w: pitch * 0.86,
+      d,
+      base: top,
+      top: top + 9,
+    });
+  }
+  return out;
+}
+
+/** The fixed, hand-placed world: the stone circle and the henge. */
 const PLACED: Feature[] = [
-  {
-    x: KEEP_POS.x,
-    y: KEEP_POS.y,
-    sprite: KEEP_FAR,
-    height: 120,
-    landmark: true,
-    lod: KEEP_LOD,
-  },
   { x: CIRCLE_POS.x, y: CIRCLE_POS.y, sprite: DOLMEN, height: 26 },
   { x: CIRCLE_POS.x - 34, y: CIRCLE_POS.y - 14, sprite: STONE_L, height: 18 },
   { x: CIRCLE_POS.x + 30, y: CIRCLE_POS.y - 10, sprite: MENHIR, height: 16 },

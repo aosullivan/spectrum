@@ -19,12 +19,18 @@ import {
   CAM_BACK,
   CAM_HEIGHT,
   FOCAL,
-  drawBillboards,
+  collectBillboards,
   type Billboard,
   type CameraState,
 } from "@/lib/rpg/projection";
+import { collectFaces } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
-import { DEAD_WOOD_X, featuresNear, groundColour } from "@/lib/rpg/world";
+import {
+  DEAD_WOOD_X,
+  KEEP_BOXES,
+  featuresNear,
+  groundColour,
+} from "@/lib/rpg/world";
 
 export type { Billboard as WorldEntity, CameraState };
 
@@ -323,6 +329,13 @@ export function renderFrame(
   const ley = drawGround(s, cam, t);
   s.attributePass(0, HUD_TOP);
   for (let i = 0; i < ley.length; i += 2) s.fb[ley[i]] = ley[i + 1];
-  drawBillboards(s, cam, [...featuresNear(cam.x, cam.y, 900), ...entities]);
+  // Masonry and sprites are interleaved by depth, so a tree in front of the
+  // keep occludes it and one behind does not.
+  const jobs = [
+    ...collectFaces(cam, KEEP_BOXES),
+    ...collectBillboards(cam, [...featuresNear(cam.x, cam.y, 900), ...entities], t),
+  ];
+  jobs.sort((a, b) => b.z - a.z);
+  for (const j of jobs) j.paint(s);
   drawOverlay(s, hud, t, overlay);
 }
