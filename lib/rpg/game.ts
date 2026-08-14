@@ -10,6 +10,7 @@ import {
   type Actor,
 } from "@/lib/rpg/interact";
 import {
+  CELL,
   KEEP_INTERIOR,
   ROOF_HEIGHT,
   TOWER_INTERIOR,
@@ -35,7 +36,16 @@ import {
   type OverlayState,
 } from "@/lib/rpg/render";
 import { Screen } from "@/lib/rpg/screen";
-import { GATE, KEEP_POS, resolveMove } from "@/lib/rpg/world";
+import { drawAreaMap } from "@/lib/rpg/areamap";
+import {
+  CIRCLE_POS,
+  GATE,
+  GROVE_POS,
+  HENGE_POS,
+  KEEP_POS,
+  WOODS_EDGE_X,
+  resolveMove,
+} from "@/lib/rpg/world";
 
 export interface InputState {
   forward: boolean;
@@ -52,6 +62,8 @@ export interface InputState {
   aim: number;
   /** Edge-triggered: set on key-down, cleared once the game consumes it. */
   interact: boolean;
+  /** Edge-triggered: opens or closes the area map. */
+  toggleMap: boolean;
 }
 
 export function emptyInput(): InputState {
@@ -64,6 +76,7 @@ export function emptyInput(): InputState {
     mouseYaw: 0,
     aim: 0,
     interact: false,
+    toggleMap: false,
   };
 }
 
@@ -130,9 +143,15 @@ export class Game {
   private readonly hud: HudState = {
     spellName: "WRAITHLIGHT",
     selectedRune: 0,
-    lifeforce: 23,
+    lifeforce: 0.72,
     gems: [true, true, false],
+    place: "THE MOOR",
+    carried: [],
+    blips: [],
   };
+
+  /** True while the area map is open; the world holds still behind it. */
+  private mapOpen = false;
 
   /** Ids of items already taken and one-shot conversations already had. */
   private readonly taken = new Set<string>();
@@ -148,6 +167,17 @@ export class Game {
 
     const pressed = input.interact;
     input.interact = false;
+
+    // The map is modal: opening it stops the world, as the spellbook does.
+    if (input.toggleMap) {
+      input.toggleMap = false;
+      this.mapOpen = !this.mapOpen;
+      if (this.mapOpen) this.speed = 0;
+    }
+    if (this.mapOpen) {
+      this.speed = 0;
+      return;
+    }
 
     // A conversation holds the world still; the same key turns the page.
     if (this.talk) {
@@ -227,7 +257,7 @@ export class Game {
       };
       this.speed = 0;
       if (what.kind === "bless") {
-        this.hud.lifeforce = 34;
+        this.hud.lifeforce = 1;
         if (what.gem >= 0 && what.gem < this.hud.gems.length) {
           this.hud.gems[what.gem] = true;
         }
@@ -337,8 +367,49 @@ export class Game {
     }
   }
 
+  /** Name the ground she is standing on, for the panel caption. */
+  private whereAmI(): string {
+    if (this.onRoof) return "THE KEEP ROOF";
+    if (this.interior) {
+      return this.interior.id === "tower" ? "THE TOWER STAIR" : "THE KEEP";
+    }
+    const near = (p: { x: number; y: number }, r: number) =>
+      Math.abs(this.cam.x - p.x) < r && Math.abs(this.cam.y - p.y) < r;
+    if (near(KEEP_POS, 300)) return "THE KEEP";
+    if (near(HENGE_POS, 260)) return "THE HENGE";
+    if (near(GROVE_POS, 210)) return "THE GROVE";
+    if (near(CIRCLE_POS, 160)) return "STONE CIRCLE";
+    if (this.cam.x < WOODS_EDGE_X) return "ANCIENT WOODS";
+    return "THE MOOR";
+  }
+
+  /** Refresh the panel's live readouts before it is drawn. */
+  private refreshPanel(): void {
+    this.hud.place = this.whereAmI();
+    this.hud.carried = this.carried;
+    // Indoors the radar shows the room; outdoors, whatever is near enough.
+    if (this.interior && !this.onRoof) {
+      this.hud.plan = { rows: this.interior.plan, cell: CELL };
+      this.hud.blips = this.interior.actors
+        .filter((a) => !this.taken.has(a.id))
+        .map((a) => ({ x: a.x, y: a.y, hostile: false }));
+      return;
+    }
+    this.hud.plan = undefined;
+    this.hud.blips = DENIZENS.map((d) => ({
+      x: d.x,
+      y: d.y,
+      hostile: d.hostile,
+    }));
+  }
+
   render(screen: Screen): void {
     const overlay = this.overlay();
+    this.refreshPanel();
+    if (this.mapOpen) {
+      drawAreaMap(screen, this.cam, this.hud.place);
+      return;
+    }
     if (this.onRoof) {
       // The outdoor renderer, eye raised to the leads: the moor below is the
       // real one, only the battlements are local scenery.
@@ -357,7 +428,7 @@ export class Game {
     if (this.interior) {
       const visible = this.interior.actors.filter((a) => !this.taken.has(a.id));
       renderInterior(screen, this.interior, this.cam, [], this.t, visible);
-      drawOverlay(screen, this.hud, this.t, overlay);
+      drawOverlay(screen, this.hud, this.t, overlay, this.cam);
       return;
     }
     renderFrame(

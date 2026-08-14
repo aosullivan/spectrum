@@ -63,6 +63,12 @@ export function RpgGame() {
         e.preventDefault();
         return;
       }
+      // The area map. Escape closes it too, but only closes.
+      if (e.code === "KeyM" || e.code === "Escape") {
+        if (down && !e.repeat) input.toggleMap = true;
+        e.preventDefault();
+        return;
+      }
       const bind = keymap[e.code];
       if (bind) {
         input[bind] = down;
@@ -162,8 +168,8 @@ export function RpgGame() {
         </div>
       </div>
       <p className="shrink-0 py-2 text-center font-mono text-xs text-zinc-600">
-        WASD / arrows glide · shift boosts · E interacts · click for mouse-look ·
-        C toggles CRT
+        WASD / arrows glide · shift boosts · E interacts · M opens the map ·
+        click for mouse-look · C toggles CRT
       </p>
     </div>
   );

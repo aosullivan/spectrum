@@ -2,8 +2,6 @@
 // painter-sorted billboards, the hovering hero, and the windowed HUD.
 
 import {
-  GEM_EMPTY,
-  GEM_FULL,
   HERO,
   MOON,
   RUNE_GATE,
@@ -14,10 +12,10 @@ import {
   glyph,
   textWidth,
 } from "@/lib/rpg/assets";
-import { B, BC, BG, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
+import { B, BC, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
 import {
   CAM_BACK,
-  CAM_HEIGHT,
+
   FOCAL,
   drawBillboards,
   eyeHeight,
@@ -26,6 +24,7 @@ import {
   type Billboard,
   type CameraState,
 } from "@/lib/rpg/projection";
+import { drawPanel, type Blip } from "@/lib/rpg/panel";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import { featuresNear, groundColour } from "@/lib/rpg/world";
 
@@ -166,74 +165,35 @@ const RUNES = [RUNE_LEY, RUNE_GATE, RUNE_MOON, RUNE_WARD];
 export interface HudState {
   spellName: string;
   selectedRune: number;
-  /** 0..17 half-steps of lifeforce (17 segments, last may be half). */
+  /** 0..1. */
   lifeforce: number;
   gems: [boolean, boolean, boolean];
+  /** Where she is, named. */
+  place: string;
+  /** What she is carrying. */
+  carried: readonly string[];
+  /** Everything alive near enough for the radar. */
+  blips: readonly Blip[];
+  /** Set indoors: the radar draws this room plan instead of a compass. */
+  plan?: { rows: readonly string[]; cell: number };
 }
 
-function drawHud(s: Screen, hud: HudState): void {
-  s.rect(0, HUD_TOP, 256, 40, K);
-  s.rect(0, HUD_TOP, 256, 1, W);
-  s.rect(0, 191, 256, 1, W);
-  s.rect(0, HUD_TOP, 1, 40, W);
-  s.rect(255, HUD_TOP, 1, 40, W);
-  s.rect(0, HUD_TOP + 1, 256, 1, B);
-  s.rect(0, 190, 256, 1, B);
-  for (const [px, py] of [
-    [0, HUD_TOP],
-    [254, HUD_TOP],
-    [0, 190],
-    [254, 190],
-  ]) {
-    s.rect(px, py, 2, 2, BW);
-  }
-
-  // Spell window.
-  s.rect(4, 155, 132, 1, B);
-  s.rect(4, 173, 132, 1, B);
-  s.rect(4, 155, 1, 19, B);
-  s.rect(135, 155, 1, 19, B);
-  s.blit(SPELL_DOT, 10, 161);
-  drawText(s, hud.spellName, 19, 159, 2, BY);
-
-  // Rune quick-slots.
-  for (let i = 0; i < RUNES.length; i++) {
-    const bx = 141 + i * 28;
-    const sel = i === hud.selectedRune;
-    const frame = sel ? BC : B;
-    s.rect(bx, 155, 24, 1, frame);
-    s.rect(bx, 173, 24, 1, frame);
-    s.rect(bx, 155, 1, 19, frame);
-    s.rect(bx + 23, 155, 1, 19, frame);
-    s.blit(RUNES[i], bx + 8, 160);
-    if (sel) s.rect(bx + 8, 171, 8, 1, BW);
-  }
-
-  // Lifeforce.
-  drawText(s, "LIFEFORCE", 8, 180, 1, W);
-  s.rect(52, 176, 178, 1, W);
-  s.rect(52, 188, 178, 1, W);
-  s.rect(52, 176, 1, 13, W);
-  s.rect(229, 176, 1, 13, W);
-  const full = hud.lifeforce >> 1;
-  const half = hud.lifeforce % 2 === 1;
-  for (let seg = 0; seg < 17; seg++) {
-    const sx = 54 + seg * 10;
-    if (seg < full) {
-      s.rect(sx, 179, 8, 7, G);
-      s.rect(sx, 179, 8, 1, BG);
-    } else if (seg === full && half) {
-      for (let y = 179; y < 186; y++) {
-        for (let x = sx; x < sx + 8; x++) {
-          if (((x + y) & 1) === 0) s.px(x, y, G);
-        }
-      }
-    }
-  }
-  const gems = [GEM_FULL, GEM_FULL, GEM_FULL];
-  for (let i = 0; i < 3; i++) {
-    s.blit(hud.gems[i] ? gems[i] : GEM_EMPTY, 234 + i * 7, 179);
-  }
+/** The control panel lives in its own module; this passes it the camera. */
+function drawHud(s: Screen, hud: HudState, cam: CameraState): void {
+  drawPanel(s, {
+    spellName: hud.spellName,
+    runes: RUNES,
+    selectedRune: hud.selectedRune,
+    lifeforce: hud.lifeforce,
+    gems: hud.gems,
+    carried: hud.carried,
+    place: hud.place,
+    x: cam.x,
+    y: cam.y,
+    yaw: cam.yaw,
+    blips: hud.blips,
+    plan: hud.plan,
+  });
 }
 
 // ------------------------------------------------------------ text windows
@@ -304,12 +264,13 @@ export function drawOverlay(
   s: Screen,
   hud: HudState,
   t: number,
-  overlay?: OverlayState,
+  overlay: OverlayState | undefined,
+  cam: CameraState,
 ): void {
   drawHero(s, t);
   if (overlay?.dialogue) drawDialogue(s, overlay.dialogue, t);
   else if (overlay?.prompt) drawPrompt(s, overlay.prompt);
-  drawHud(s, hud);
+  drawHud(s, hud, cam);
 }
 
 /**
@@ -368,5 +329,5 @@ export function renderFrame(
     (f) => !(f.id && omit?.has(f.id)),
   );
   drawBillboards(s, cam, [...features, ...entities], t);
-  drawOverlay(s, hud, t, overlay);
+  drawOverlay(s, hud, t, overlay, cam);
 }

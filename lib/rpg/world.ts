@@ -42,7 +42,7 @@ const GROVE_R = 190;
  * GREENWOOD_EDGE_X it becomes living greenwood: oak, birch, bracken, and
  * the henge. Between them lies the open moor with the leyline running north.
  */
-const WOODS_EDGE_X = -260;
+export const WOODS_EDGE_X = -260;
 const GREENWOOD_EDGE_X = 260;
 /** The henge stands deep in the greenwood. */
 export const HENGE_POS = { x: 760, y: 760 };
