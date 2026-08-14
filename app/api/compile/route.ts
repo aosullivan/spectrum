@@ -4,6 +4,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { resolveGame } from "@/lib/games";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -37,6 +39,7 @@ function runProcess(
 async function compileWithLocalZcc(
   source: string,
   dir: string,
+  label: string,
 ): Promise<CompileResult | null> {
   const zcc = process.env.ZCC ?? "zcc";
   const srcPath = join(dir, "game.c");
@@ -67,7 +70,7 @@ async function compileWithLocalZcc(
   const log = `${stdout}\n${stderr}`.trim();
 
   if (code !== 0) {
-    return { ok: false, error: parseFirstError(log, srcPath) ?? `Compilation failed (exit ${code})`, log };
+    return { ok: false, error: parseFirstError(log, srcPath, label) ?? `Compilation failed (exit ${code})`, log };
   }
 
   try {
@@ -81,6 +84,7 @@ async function compileWithLocalZcc(
 async function compileWithDocker(
   source: string,
   dir: string,
+  label: string,
 ): Promise<CompileResult | null> {
   const srcPath = join(dir, "game.c");
   await writeFile(srcPath, source);
@@ -120,7 +124,7 @@ async function compileWithDocker(
   const log = `${stdout}\n${stderr}`.trim();
 
   if (code !== 0) {
-    return { ok: false, error: parseFirstError(log, srcPath) ?? `Docker z88dk failed (exit ${code})`, log };
+    return { ok: false, error: parseFirstError(log, srcPath, label) ?? `Docker z88dk failed (exit ${code})`, log };
   }
 
   try {
@@ -131,29 +135,55 @@ async function compileWithDocker(
   }
 }
 
-// Pull the first diagnostic-looking line out of compiler output.
-function parseFirstError(log: string, srcPath: string): string | null {
+// Pull the first diagnostic-looking line out of compiler output. Both back
+// ends build a file called game.c in a scratch dir; rewrite that back to the
+// caller's own filename so errors point at something they can open.
+function parseFirstError(log: string, srcPath: string, label: string): string | null {
   const lines = log.split("\n");
   for (const line of lines) {
     if (/error:/i.test(line) || /^\s*[^:]+:\d+:\d+: /.test(line)) {
-      return line.replace(srcPath, "game.c").trim();
+      return line.replaceAll(srcPath, label).replaceAll("game.c", label).trim();
     }
   }
   return null;
 }
 
 export async function POST(req: NextRequest) {
-  let body: { source?: unknown };
+  let body: { source?: unknown; path?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const source = body.source;
-  if (typeof source !== "string" || source.length === 0) {
-    return NextResponse.json({ error: "Missing 'source' string" }, { status: 400 });
+  // Two callers: the studio POSTs its editor buffer as `source`, the /play
+  // runner names a file in games/ as `path`.
+  let source: string;
+  let label = "game.c";
+
+  if (typeof body.path === "string") {
+    const found = await resolveGame(body.path);
+    if (!found.ok) {
+      return NextResponse.json({ error: found.error }, { status: found.status });
+    }
+    try {
+      source = await readFile(found.path, "utf8");
+    } catch {
+      return NextResponse.json(
+        { error: `Could not read games/${found.name}` },
+        { status: 404 },
+      );
+    }
+    label = found.name;
+  } else if (typeof body.source === "string" && body.source.length > 0) {
+    source = body.source;
+  } else {
+    return NextResponse.json(
+      { error: "Missing 'source' string or 'path'" },
+      { status: 400 },
+    );
   }
+
   if (source.length > MAX_SOURCE_BYTES) {
     return NextResponse.json({ error: "Source too large" }, { status: 413 });
   }
@@ -161,9 +191,9 @@ export async function POST(req: NextRequest) {
   const dir = await mkdtemp(join(tmpdir(), "spectrum-build-"));
 
   try {
-    let result = await compileWithLocalZcc(source, dir);
+    let result = await compileWithLocalZcc(source, dir, label);
     if (result === null) {
-      result = await compileWithDocker(source, dir);
+      result = await compileWithDocker(source, dir, label);
     }
     if (result === null) {
       return NextResponse.json(
@@ -187,7 +217,7 @@ export async function POST(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/octet-stream",
-        "Content-Disposition": 'attachment; filename="game.tap"',
+        "Content-Disposition": `attachment; filename="${label.replace(/\.c$/, "")}.tap"`,
         "Cache-Control": "no-store",
       },
     });

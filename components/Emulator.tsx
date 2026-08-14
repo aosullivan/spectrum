@@ -76,12 +76,23 @@ function fittingZoom(el: HTMLElement): number {
   return Math.max(1, Math.min(4, Number.isFinite(z) ? z : 1));
 }
 
-export const Emulator = forwardRef<EmulatorHandle>(function Emulator(_, ref) {
+type Props = {
+  // The instance is built asynchronously (script fetch, then wasm), so a ref
+  // alone can't tell a caller when loadTap will actually work.
+  onReady?: () => void;
+};
+
+export const Emulator = forwardRef<EmulatorHandle, Props>(function Emulator(
+  { onReady },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<JSSpeccyInstance | null>(null);
   const lastUrlRef = useRef<string | null>(null);
   const zoomRef = useRef<number>(0);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   const fitToPane = useCallback(() => {
     const el = containerRef.current;
@@ -118,6 +129,7 @@ export const Emulator = forwardRef<EmulatorHandle>(function Emulator(_, ref) {
           keyboardEnabled: true,
         });
         zoomRef.current = fittingZoom(containerRef.current);
+        onReadyRef.current?.();
       })
       .catch((err) => {
         console.error(err);
