@@ -53,6 +53,8 @@ export interface Billboard {
   elevate?: number;
   /** Body radius in world units; omitted props can be walked through. */
   solid?: number;
+  /** Radius in world units over which this prop throws warm light. */
+  light?: number;
   /** Cycled at `fps` when present, for flame flicker and the like. */
   frames?: readonly Sprite[];
   fps?: number;
@@ -70,14 +72,23 @@ export interface Billboard {
  * Project billboards against the camera and paint them back-to-front.
  * Shared by the open world and interiors so props behave identically in both.
  */
-export function drawBillboards(
-  s: Screen,
+export interface SpriteDraw {
+  z: number;
+  paint: (s: Screen) => void;
+}
+
+/**
+ * Project billboards and return them as depth-tagged paint jobs, so the
+ * caller can interleave them with other drawables (building faces) instead
+ * of drawing sprites strictly on top.
+ */
+export function collectBillboards(
   cam: CameraState,
   items: readonly Billboard[],
   t = 0,
   /** Per-column wall distance from the interior raycaster; null outdoors. */
   depth: Float32Array | null = null,
-): void {
+): SpriteDraw[] {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
   const drawn: {
@@ -132,19 +143,25 @@ export function drawBillboards(
     });
   }
 
-  drawn.sort((a, b) => b.z - a.z);
-  for (const it of drawn) {
+  return drawn.map((it) => {
     const w = (it.h * it.sprite.w) / it.sprite.h;
     const footY = Math.min(it.baseY, HUD_TOP);
     // Far billboards dissolve into the dark like the terrain does — but
     // landmarks never do: they already swap to low-detail LOD art at range,
     // and a dithered castle reads as noise instead of a destination.
     const dither = it.landmark ? 0 : it.z > 1600 ? 2 : it.z > 800 ? 1 : 0;
-    // The pool goes down first, so the thing standing in it occludes it.
-    if (it.glow) drawGlow(s, it.screenX, footY, w, t, depth, it.z);
-    if (it.highlight) drawHalo(s, it.sprite, it.screenX, footY, w, it.h, depth, it.z);
-    s.blitScaled(it.sprite, it.screenX, footY, w, it.h, dither, undefined, depth, it.z);
-  }
+    return {
+      z: it.z,
+      paint: (s: Screen) => {
+        // The pool goes down first, so what stands in it occludes it.
+        if (it.glow) drawGlow(s, it.screenX, footY, w, t, depth, it.z);
+        if (it.highlight) {
+          drawHalo(s, it.sprite, it.screenX, footY, w, it.h, depth, it.z);
+        }
+        s.blitScaled(it.sprite, it.screenX, footY, w, it.h, dither, undefined, depth, it.z);
+      },
+    };
+  });
 }
 
 /**
@@ -214,4 +231,17 @@ function drawHalo(
   for (const [ox, oy] of ring) {
     s.blitScaled(sprite, cx + ox, baseY + oy, w, h, 0, BW, depth, z);
   }
+}
+
+/** Paint billboards alone, back to front. */
+export function drawBillboards(
+  s: Screen,
+  cam: CameraState,
+  items: readonly Billboard[],
+  t = 0,
+  depth: Float32Array | null = null,
+): void {
+  const jobs = collectBillboards(cam, items, t, depth);
+  jobs.sort((a, b) => b.z - a.z);
+  for (const j of jobs) j.paint(s);
 }

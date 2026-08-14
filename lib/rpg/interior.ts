@@ -5,7 +5,7 @@
 
 import { NPC_SEER, NPC_SHADE } from "@/lib/rpg/bestiary";
 import { EXIT_ARCH, ITEM_KEY, ITEM_TORC, TORC_FRAMES } from "@/lib/rpg/items";
-import { BC, BW, C, K, W } from "@/lib/rpg/palette";
+import { BC, BW, BY, C, K, W, Y } from "@/lib/rpg/palette";
 import type { Actor } from "@/lib/rpg/interact";
 import {
   BANNER,
@@ -90,15 +90,15 @@ export const KEEP_INTERIOR: Interior = {
     at(6, 1.3, LEY_FONT, 34, { solid: 17 }),
     at(6, 3.4, INNER_ARCH, 76),
     // Great hall: braziers at the corners, banners on the far wall.
-    at(1.2, 4.6, BRAZIER, 30, { solid: 12 }),
-    at(10.8, 4.6, BRAZIER, 30, { solid: 12 }),
+    at(1.2, 4.6, BRAZIER, 30, { solid: 12, light: 92 }),
+    at(10.8, 4.6, BRAZIER, 30, { solid: 12, light: 92 }),
     at(3.6, 4.15, BANNER, 34, { elevate: 34 }),
     at(8.4, 4.15, BANNER, 34, { elevate: 34 }),
     // Sconces lighting the way in.
-    at(4.6, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES }),
-    at(7.4, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES }),
-    at(5.15, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES }),
-    at(7.85, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES }),
+    at(4.6, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
+    at(7.4, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
+    at(5.15, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
+    at(7.85, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
   ],
   actors: [
     {
@@ -232,6 +232,28 @@ export function resolveInteriorMove(
   return { x: fromX, y: fromY };
 }
 
+// ------------------------------------------------------------------- light
+
+/**
+ * How brightly the room's fires reach a point on the floor, 0..1. Torch
+ * light is the one warm thing in a keep made of white line-work, and it is
+ * what stops a chamber reading as a diagram.
+ */
+function litness(interior: Interior, wx: number, wy: number): number {
+  let best = 0;
+  for (const p of interior.props) {
+    if (!p.light) continue;
+    const dx = wx - p.x;
+    const dy = wy - p.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d >= p.light) continue;
+    // Quadratic falloff: a torch should make a pool, not floodlight a hall.
+    const v = (1 - d / p.light) ** 2;
+    if (v > best) best = v;
+  }
+  return best;
+}
+
 // ------------------------------------------------------------------- floor
 
 /**
@@ -250,6 +272,17 @@ function floorColour(interior: Interior, wx: number, wy: number): number {
   return K;
 }
 
+/**
+ * 4x4 ordered dither. The walls no longer need it — they fill solid — but
+ * firelight does: a torch pool has to fade out over the flags, and a hard
+ * edge on a pool of light reads as a painted disc.
+ */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+function toned(x: number, y: number, level: number): boolean {
+  return BAYER[(y & 3) * 4 + (x & 3)] < level * 16;
+}
+
 function drawFloor(s: Screen, interior: Interior, cam: CameraState): void {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
@@ -264,6 +297,14 @@ function drawFloor(s: Screen, interior: Interior, cam: CameraState): void {
       const wx = ex + fx * dist + fy * lat;
       const wy = ey + fy * dist - fx * lat;
       const colour = floorColour(interior, wx, wy);
+      // Firelight pools on the flags before anything else is drawn on them.
+      const lit = litness(interior, wx, wy);
+      // Firelight only fills the dark between the flags — the slab joints
+      // stay white, so the floor keeps its drawing under the glow.
+      if (colour === K && lit > 0.05 && toned(sx, sy, lit * 0.72)) {
+        s.fb[sy * SCREEN_W + sx] = lit > 0.55 ? BY : Y;
+        continue;
+      }
       if (colour === K) continue;
       if (faint && colour === W && (sx + sy) % 2 !== 0) continue;
       s.fb[sy * SCREEN_W + sx] = colour;
@@ -280,6 +321,9 @@ interface Hit {
   z: number;
   top: number;
   bot: number;
+  /** Where on the wall the ray landed, in world units — used for lighting. */
+  hitX: number;
+  hitY: number;
 }
 
 /** One DDA per screen column; null where the ray escaped the plan. */
@@ -341,6 +385,8 @@ function castColumns(interior: Interior, cam: CameraState): (Hit | null)[] {
       z,
       top: heightRow(WALL_H, z),
       bot: groundRow(z),
+      hitX: (px + perp * dirX) * CELL,
+      hitY: (py + perp * dirY) * CELL,
     });
   }
   return out;

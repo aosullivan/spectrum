@@ -43,3 +43,6 @@ next-env.d.ts
 # claude code — worktrees/ holds live git worktree metadata, never commit it
 /.claude/worktrees/
 /.claude/settings.local.json
+
+# Prototyping screenshots — regenerate with the gallery harness, do not commit
+/images/

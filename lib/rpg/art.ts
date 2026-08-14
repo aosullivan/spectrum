@@ -159,7 +159,7 @@ export const TREE_GNARLED_A = sprite(
     ".......gg..gg.......",
     "......g......gg.....",
   ],
-  { g: G, b: BG },
+  { g: W, b: BW },
 );
 
 /** Smaller bent tree — a distinct silhouette from its big sibling. (14x20) */
@@ -186,7 +186,7 @@ export const TREE_GNARLED_B = sprite(
     "....gg........",
     "...gggg.......",
   ],
-  { g: G, b: BG },
+  { g: W, b: BW },
 );
 
 /** A bare spike of a dead pine. (10x22) */
@@ -215,7 +215,7 @@ export const TREE_DEAD_PINE = sprite(
     "..g.g.....",
     "...ggg....",
   ],
-  { g: G },
+  { g: W },
 );
 
 /** Rune-carved standing stone. (7x14) */

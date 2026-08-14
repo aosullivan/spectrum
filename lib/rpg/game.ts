@@ -257,10 +257,13 @@ export class Game {
       return;
     }
 
-    // Only once you are actually under the arch, not merely near the keep.
+    // A bounded box under the arch, not a half-plane: the old test was
+    // "anywhere north of this line", which swallowed anyone who walked
+    // round to the back of the keep.
     const inGate =
       Math.abs(this.cam.x - KEEP_POS.x) < GATE.halfW &&
-      this.cam.y > KEEP_POS.y - GATE.trigger;
+      this.cam.y > KEEP_POS.y - GATE.trigger &&
+      this.cam.y < KEEP_POS.y + GATE.trigger;
     if (inGate) {
       if (!this.transitionLock) {
         // Step back out facing away from the keep, clear of the arch.
