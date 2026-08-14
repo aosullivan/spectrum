@@ -1,7 +1,7 @@
 // The bestiary: everything alive in the world that is not the player.
 // String bitmaps, one char per pixel, '.' transparent — the agreed format.
 
-import { BC, BG, BR, BW, BY, C, G, K, M, R, W, Y } from "@/lib/rpg/palette";
+import { BC, BG, BM, BR, BW, BY, C, G, K, M, R, W, Y } from "@/lib/rpg/palette";
 import { sprite } from "@/lib/rpg/screen";
 
 /**
@@ -61,57 +61,60 @@ export const DRAGON = sprite(
 );
 
 /**
- * A barrow-ghoul: pale, hunched, and still wearing its own face.
+ * A barrow-ghoul, walking bones — skull, ribs and not much else, picked
+ * out in white line-work because bone is the one thing in the moor that
+ * is genuinely pale.
  * (12x18)
  */
 export const GHOUL = sprite(
   [
-    ".....wwww...",
-    "....wwwwww..",
-    "...ww.ww.ww.",
-    "...wkw.wkw..",
-    "...wwwwwwww.",
-    "....w.ww.w..",
-    "...wwwwwww..",
-    "..wwwwwwww..",
-    ".ww.wwwwww..",
-    "w.w..wwww.w.",
-    "w.w..wwww.ww",
-    ".ww.wwwwww.w",
-    "..w.ww..ww.w",
-    "..w.w....w..",
-    "....w....w..",
-    "...ww....w..",
-    "...w.....ww.",
-    "..ww......w.",
+    "....HHHH....",
+    "...HwwwwH...",
+    "...HkwwkH...",
+    "...HwwwwH...",
+    "....HwwH....",
+    "....wHHw....",
+    "..w.HHHH.w..",
+    ".ww.HwwH.ww.",
+    ".w..HHHH..w.",
+    ".w..HwwH..w.",
+    "....HHHH....",
+    "....wHHw....",
+    "...HH..HH...",
+    "...w....w...",
+    "...H....H...",
+    "...w....w...",
+    "..HH....HH..",
+    ".HH......HH.",
   ],
-  { w: W, k: K },
+  { w: W, H: BW, k: K },
 );
 
 /**
- * A goblin scout with a stolen spear.
+ * A goblin scout — horned, tailed, and carrying a stolen trident it has
+ * not worked out how to use.
  * (12x16)
  */
 export const GOBLIN = sprite(
   [
-    "..g......g..",
-    "..gg....gg..",
-    "...gggggg...",
-    "..ggrggrgg..",
-    "..gggggggg..",
-    "...gg..gg...",
-    "....gggg....",
-    "..s.gggg....",
-    "..s.ggggg...",
-    "..s.gggggg..",
-    "..sggggggg..",
-    "..s.gggg....",
-    "..s.gg.gg...",
-    "..s.gg.gg...",
-    "....gg.gg...",
-    "...ggg.ggg..",
+    ".m......m...",
+    "..mm..mm....",
+    "...hhhh.....",
+    "..hkhhkh....",
+    "..hhhhhhw.w.",
+    "...mmmm.www.",
+    "..mmmmmm.w..",
+    ".mmmmmmm.w..",
+    "mmmmmmmm.w..",
+    ".mmmmmmm.w..",
+    "..mmmmmm.w..",
+    "..mm..mm.w..",
+    "..mm..mm.w..",
+    "..m....m.w..",
+    ".mm....mm...",
+    ".mm....mm.h.",
   ],
-  { g: G, r: BR, s: W },
+  { m: M, h: BM, k: K, w: W },
 );
 
 /**
@@ -163,29 +166,31 @@ export const SPIDER = sprite(
 );
 
 /**
- * One of the kind folk of the greenwood, bow strung and watchful.
+ * A forester of the greenwood: hooded, green-clad, spear grounded. Bright
+ * green edges the dark green body, so a warden reads against the moor's
+ * own green rather than dissolving into it.
  * (13x16)
  */
 export const ELF_ARCHER = sprite(
   [
-    "....yy.......",
-    "...yyyy..bb..",
-    "..yywwyy.s.b.",
-    "..yywwyy.s..b",
-    "...yyyy..s..b",
-    "....yy...s..b",
-    "..yyyyyy.s..b",
-    ".yyyyyyyys..b",
-    "yy.yyyy.ys..b",
-    "y..yyyy..s..b",
-    "...yyyy..s..b",
-    "...yyyy..s..b",
-    "...yy.yy.s.b.",
-    "...yy.yy.bb..",
-    "...yy.yy.....",
-    "..yyy.yyy....",
+    "....GGG....H.",
+    "..GGGGGGG..H.",
+    "....gggg...w.",
+    "....gkkg...w.",
+    "....gggg...w.",
+    "...GGGGGG..w.",
+    "..GggggggG.w.",
+    "..GggggggG.w.",
+    "..GggggggG.w.",
+    "...gggggg..w.",
+    "...gggggg..w.",
+    "...gg..gg..w.",
+    "...gg..gg..w.",
+    "...gg..gg..w.",
+    "..GGg..gGG...",
+    ".GG......GG..",
   ],
-  { y: Y, w: BW, b: W, s: C },
+  { g: G, G: BG, w: W, H: BW, k: K },
 );
 
 /**
@@ -247,37 +252,39 @@ export const POOL_RIPPLE = sprite(
 );
 
 /**
- * A bent hermit of the greenwood, leaning on a crooked staff.
+ * A wanderer of the greenwood under a wide brim, leaning on a staff. Grey
+ * cloth edged in white — the neutral folk take no colour of their own, which
+ * is how you tell them from the greenwood's green and the dead's cyan.
  * (14x24)
  */
 export const NPC_HERMIT = sprite(
   [
-    "......gggg....",
-    ".....gggggg...",
-    "....ggwwwwg...",
-    "s...ggwkkwg...",
-    ".s..ggwwwwg...",
-    "..s..gggggg...",
-    "..s..gggggg...",
-    "...s.hgggggg..",
-    "...s.gggggggg.",
-    "...sggggggggg.",
-    "...sggggggggg.",
-    "...sgggggggggg",
-    "...gggggggggg.",
-    "...sgggggggg..",
-    "...sggggggggg.",
-    "...sgggggggggg",
-    "...sggggggggg.",
-    "...s.gggggggg.",
-    "...s.gggggggg.",
-    "...s..gggggg..",
-    "...s..gggggg..",
-    "...s..ggg.ggg.",
-    "......ggg.ggg.",
-    ".....gggg.ggg.",
+    "......HHH.....",
+    ".....HwwwH....",
+    "...HHHHHHHHH..",
+    ".....wkkkw....",
+    ".H...wwwww....",
+    ".H..HwwwwwH...",
+    ".H..HwwwwwH...",
+    ".H.HHwwwwwHH..",
+    ".H.HwwwwwwwH..",
+    ".H.HwwwwwwwH..",
+    ".HHHwwwwwwwH..",
+    ".H.HwwwwwwwH..",
+    ".H.HwwHwwHwwH.",
+    ".H.HwwHwwHwwH.",
+    ".H.HwwHwwHwwH.",
+    ".H.HwwHwwHwwH.",
+    ".H.HwwwwwwwH..",
+    ".H.HwwwwwwwH..",
+    ".H..HwwwwwH...",
+    ".H..HwwwwwH...",
+    ".H..Hww.wwH...",
+    ".H..Hw...wH...",
+    "....HH...HH...",
+    "...HH.....HH..",
   ],
-  { g: G, h: BG, w: W, k: K, s: W },
+  { w: W, H: BW, k: K },
 );
 
 /**
@@ -287,60 +294,62 @@ export const NPC_HERMIT = sprite(
  */
 export const NPC_SHADE = sprite(
   [
-    "......cccc....",
-    ".....ccbbcc...",
-    ".....cbkkbc...",
-    ".....cbkkbc...",
-    ".....ccbbcc...",
-    "......cccc....",
-    "..b....cc.....",
-    "..bc..cccc....",
-    "..bc.cc..cc...",
-    "..bcccc..cccc.",
-    "..bcc.c..c.cc.",
-    "...ccc.cc.ccc.",
-    "...c.c.cc.c.c.",
-    "...ccc.cc.ccc.",
-    "....c..cc..c..",
-    "....ccccccc...",
-    "....c.c.c.c...",
-    "....ccc.ccc...",
-    "....c.c.c.c...",
-    "....ccc.ccc...",
-    "....c.....c...",
-    "...cc.....cc..",
-    "...c.......c..",
-    "..cc.......cc.",
+    ".....CCCC.....",
+    "....CccccC....",
+    "....CkcckC....",
+    "....CccccC....",
+    ".....CccC.....",
+    "......cc......",
+    "...CccccccC...",
+    ".C.CccccccC.C.",
+    ".C.CccccccC.C.",
+    ".C.CccccccC.C.",
+    "..CCccccccCC..",
+    "...CccccccC...",
+    "...Ccc..ccC...",
+    "...Ccc..ccC...",
+    "...Ccc..ccC...",
+    "...CccccccC...",
+    "...CccccccC...",
+    "....CccccC....",
+    "....CccccC....",
+    "....Cc.ccC....",
+    ".....c.c.c....",
+    "....c...c.c...",
+    "...c.....c....",
+    "..c.......c...",
   ],
-  { c: C, b: BC, k: K },
+  { c: C, C: BC, k: K },
 );
 
 /**
- * A seated seer, hood down, a small ley-light cupped in her hands.
+ * A seated scholar under a wide brim, a small ley-light cupped in her
+ * hands. Yellow is the scholarly ink on this sheet, and it is the only
+ * warm colour indoors — which is why the sanctum reads as occupied.
  * (14x20)
  */
 export const NPC_SEER = sprite(
   [
-    ".....mmmm.....",
-    "....mmmmmm....",
-    "....mmwwmm....",
-    "....mmmmmm....",
-    ".....mmmm.....",
-    "....mmmmmm....",
-    "...mmmmmmmm...",
-    "..mmmmmmmmmm..",
-    "..mmmm..mmmm..",
-    "..mmm.cc.mmm..",
-    "..mmm.cwc.mm..",
-    "..mmmccwccmm..",
-    "..mmmmcccmmm..",
-    ".mmmmmmmmmmmm.",
-    ".mmmmmmmmmmmm.",
-    "mmmmmmmmmmmmmm",
-    "mmmmmmmmmmmmmm",
-    "mmmmmmmmmmmmmm",
-    ".mmmmmmmmmmmm.",
-    "..mmmmmmmmmm..",
+    "......YYY.....",
+    ".....YyyyY....",
+    "...YYYYYYYYY..",
+    ".....ykkky....",
+    "......yyy.....",
+    "....YyyyyyY...",
+    "...YyyyyyyyY..",
+    "...YyycccyyY..",
+    "...YyycHcyyY..",
+    "...YyycccyyY..",
+    "...YyyyyyyyY..",
+    "..YyyyyyyyY...",
+    "..YyyyyyyyY...",
+    "..YyyyyyyyY...",
+    ".YyyyyyyyyyY..",
+    ".YyyyyyyyyyY..",
+    ".YyyyyyyyyyY..",
+    "YyyyyyyyyyyyY.",
+    "YyyyyyyyyyyyY.",
+    ".YYYYYYYYYYYY.",
   ],
-  { m: M, w: BW, c: BC },
+  { y: Y, Y: BY, H: BW, c: BC, k: K },
 );

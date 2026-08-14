@@ -97,7 +97,11 @@ export class Screen {
    * Billboard blit: destination is `dw`x`dh` pixels, nearest-neighbour sampled,
    * anchored at bottom-centre (bx, by). Fractional sizes are how distant
    * things stay small. `dither` fades far billboards into the dark:
-   * 0 solid, 1 checkerboard, 2 sparse (1 in 4).
+   * 0 solid, 1 checkerboard, 2 sparse (1 in 4). `tint` paints every opaque
+   * pixel one colour, which is how a silhouette gets smeared into a halo.
+   * `depth` is the per-column wall distance from the raycaster: any column
+   * whose wall is nearer than `z` is skipped, so stone hides what is behind
+   * it. Without it billboards paint straight over the walls.
    */
   blitScaled(
     spr: Sprite,
@@ -106,6 +110,9 @@ export class Screen {
     dw: number,
     dh: number,
     dither = 0,
+    tint?: number,
+    depth?: Float32Array | null,
+    z = 0,
   ): void {
     const w = Math.max(1, Math.round(dw));
     const h = Math.max(1, Math.round(dh));
@@ -116,11 +123,12 @@ export class Screen {
       const py = y0 + dy;
       for (let dx = 0; dx < w; dx++) {
         const px = x0 + dx;
+        if (depth && px >= 0 && px < SCREEN_W && depth[px] < z) continue;
         if (dither === 1 && ((px + py) & 1) !== 0) continue;
         if (dither === 2 && ((px & 1) !== 0 || (py & 1) !== 0)) continue;
         const sx = Math.min(spr.w - 1, Math.floor((dx * spr.w) / w));
         const colour = spr.data[sy * spr.w + sx];
-        if (colour !== T) this.px(px, py, colour);
+        if (colour !== T) this.px(px, py, tint ?? colour);
       }
     }
   }

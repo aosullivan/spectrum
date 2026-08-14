@@ -76,70 +76,81 @@ export function glyph(ch: string, colour: number): Sprite | null {
 
 // -------------------------------------------------------------------- actors
 
-/** The spirit-mage, seen from behind, hood up, robe tapering to a wisp. */
+/**
+ * The spirit-mage: the Seeker of Light, seen from behind, hood up, staff in
+ * her right hand and the robe tapering to a wisp. Back view is the only one
+ * the game ever shows, so the hood is solid — there is no face to draw — and
+ * the reading comes from the cyan: crystal above, hem below.
+ * (22x32)
+ */
 export const HERO = sprite(
   [
-    "..........ww..........",
-    ".........wwwH.........",
-    "........wwwwwH........",
-    "........wwwwwH........",
-    ".......wwwkkwww.......",
-    ".......wwkkkkww.......",
-    "......wwwkkkkwww......",
-    "......wwwwkkwwww......",
-    ".......wwwwwwww.......",
-    ".....wwwwwwwwwwwH.....",
-    "...wwwwwwwwwwwwwwwH...",
-    "..wwwwwwwwwwwwwwwwwH..",
-    "..wwwwwwwwwwwwwwwwwH..",
-    "..wwkwwwwkkwwwwkwwwH..",
-    "..wwkwwwwkkwwwwkwwwH..",
-    "..wwkwwwwkkwwwwkwww...",
-    "...wkwwwwkkwwwwkwww...",
-    "...wkwwwwkkwwwwkww....",
-    "...wwkwwwkkwwwkww.....",
-    "....wkwwwkkwwwkw......",
-    "....wwkwwkkwwkww......",
-    ".....wkwwkkwwkw.......",
-    ".....wwkwkkwkww.......",
-    "......wwwkkwww........",
-    "......cwwwwwwc........",
-    ".......wwwwww.........",
-    ".......cwwwwc.........",
-    "........wwww..........",
-    ".........www..........",
-    ".........ww...........",
-    "..........ww..........",
-    "...........w..........",
+    "..................C...",
+    ".................CHC..",
+    "......HHHH......cCHCc.",
+    ".....HwwwwH......CHC..",
+    "....HwwwwwwH......C...",
+    "....HwwwwwwH......H...",
+    "....HwwwwwwH......H...",
+    "....HHwwwwHH......H...",
+    "...HHwwwwwwHH.....H...",
+    "..HHwwkkkkwwHH....H...",
+    "..HwwwwwwwwwwH....H...",
+    "..HwwwwwwwwwwHwwwHH...",
+    "..HwwkwwwwkwwH....H...",
+    "..HwwkwwwwkwwH....H...",
+    "..HwwkwwwwkwwH....H...",
+    "..HwwkwwwwkwwH....H...",
+    "..HwwkwwwwkwwH....H...",
+    "..HwwkwwwwkwwH....H...",
+    "...HwkwwwwkwH.....H...",
+    "...HwkwwwwkwH.....H...",
+    "....HwwwwwwH......H...",
+    "....HwwwwwwH......H...",
+    ".....HwwwwH.......H...",
+    ".....cwwwwc.......H...",
+    "......cwwc........H...",
+    "......cCCc........c...",
+    ".......CC.............",
+    ".......Cc.............",
+    "........c.............",
+    "........c.............",
+    ".......c.c............",
+    "......c...c...........",
   ],
-  { w: W, H: BW, k: K, c: C },
+  { w: W, H: BW, k: K, c: C, C: BC },
 );
 
-/** A wraith — tattered dark shape with a pale face — our first haunt. */
+/**
+ * A wraith: cold light in the shape of a person, hollow-eyed, going to
+ * tatters from the hem up. Cyan throughout — the spectral dead all share
+ * one ink, so a haunt is known before it is recognised.
+ * (20x20)
+ */
 export const WRAITH = sprite(
   [
-    "..........wbbb......",
-    "........bbbbbbb.....",
-    ".......bbbbbbbbb....",
-    ".......bbFFFFFbb....",
-    "......bbFFFFFFFb....",
-    "......bbFkFFkFFb....",
-    "......bbFFFFFFFb....",
-    ".....bbbFFFFFFbb....",
-    ".....bbbbFFFFbbb....",
-    "....bbbbbbbbbbbb....",
-    "...bbbbbbbbbbbbbb...",
-    "..bbbbbbbbbbbbbbb...",
-    "..bbbbbbbbbbbbbbbb..",
-    ".bbb.bbbbbbbbbbbbb..",
-    "bbb..bbbb.bbbbbbbb..",
-    "bb...bbb...bbbbbb...",
-    "b.....bb....bbbb....",
-    ".......b.....bbb....",
-    ".............bb.....",
-    "..............b.....",
+    "........CCCC........",
+    "......CCccccCC......",
+    ".....CccccccccC.....",
+    ".....CckkcckkcC.....",
+    ".....CccccccccC.....",
+    "......CccccccC......",
+    ".......CccccC.......",
+    "....CCccccccccCC....",
+    "...CccccccccccccC...",
+    "...CccccccccccccC...",
+    "..CccccccccccccccC..",
+    "..CccccccccccccccC..",
+    "..Ccccc.cc.cccccC...",
+    "...Cccc..cc..cccC...",
+    "...Ccc...cc...ccC...",
+    "....Cc...cc...cC....",
+    ".....c...cc...c.....",
+    ".....c....c....c....",
+    "......c.......c.....",
+    ".......c.....c......",
   ],
-  { b: B, F: BW, k: K, w: W },
+  { c: C, C: BC, k: K },
 );
 
 // ----------------------------------------------------------------- landmarks

@@ -27,6 +27,64 @@ export const ITEM_TORC = sprite(
 );
 
 /**
+ * The torc again with every fixed highlight removed, so exactly one glint
+ * can travel round the ring: top-left, then the right shoulder, then the
+ * bottom. Three frames is enough for the eye to read it as one moving
+ * point rather than three sparks flickering at once.
+ */
+function torcGlint(rows: string[]): typeof ITEM_TORC {
+  return sprite(rows, { Y: Y, y: BY, w: BW });
+}
+
+const ITEM_TORC_A = torcGlint([
+  "....yy..yy....",
+  "..wwyy..yYy...",
+  "...Yyy..yyY...",
+  "..yyyY..yyyy..",
+  ".YYY......yYY.",
+  ".Yyy......yYy.",
+  ".yY........Yy.",
+  ".Yy........Yy.",
+  ".YYY......yYy.",
+  "..yYy....YYY..",
+  "...YyYyYyyy...",
+  "....yyYyyY....",
+]);
+
+const ITEM_TORC_B = torcGlint([
+  "....yy..yy....",
+  "..yyyy..yYy...",
+  "...Yyy..yyY...",
+  "..yyyY..yyyy..",
+  ".YYY......ywY.",
+  ".Yyy......ywy.",
+  ".yY........Yy.",
+  ".Yy........Yy.",
+  ".YYY......yYy.",
+  "..yYy....YYY..",
+  "...YyYyYyyy...",
+  "....yyYyyY....",
+]);
+
+const ITEM_TORC_C = torcGlint([
+  "....yy..yy....",
+  "..yyyy..yYy...",
+  "...Yyy..yyY...",
+  "..yyyY..yyyy..",
+  ".YYY......yYY.",
+  ".Yyy......yYy.",
+  ".yY........Yy.",
+  ".Yy........Yy.",
+  ".YYY......yYy.",
+  "..yYy....YYY..",
+  "...YyYwwyyy...",
+  "....yyYyyY....",
+]);
+
+/** Three frames at a lazy 4fps: a glint travelling round the gold. */
+export const TORC_FRAMES = [ITEM_TORC_A, ITEM_TORC_B, ITEM_TORC_C];
+
+/**
  * An old iron key, bow pierced and bit notched.
  * (9x16)
  */
@@ -51,6 +109,10 @@ export const ITEM_KEY = sprite(
   ],
   { W: W, k: K, w: BW },
 );
+
+// The key gets no glint. Its art is already white, so a bright-white
+// highlight has nothing to contrast against — at pickup size the frames were
+// indistinguishable. The ley-pool underneath does the marking instead.
 
 /**
  * A rolled vellum scroll tied with a faded ribbon.

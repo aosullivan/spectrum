@@ -4,7 +4,7 @@
 // keep's facade seen from the inside.
 
 import { NPC_SEER, NPC_SHADE } from "@/lib/rpg/bestiary";
-import { EXIT_ARCH, ITEM_KEY, ITEM_TORC } from "@/lib/rpg/items";
+import { EXIT_ARCH, ITEM_KEY, ITEM_TORC, TORC_FRAMES } from "@/lib/rpg/items";
 import { BC, BW, C, K, W } from "@/lib/rpg/palette";
 import type { Actor } from "@/lib/rpg/interact";
 import {
@@ -124,9 +124,9 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(9.1, 5.9, ITEM_TORC, 13),
+      ...at(9.1, 5.9, ITEM_TORC, 13, { glow: true, frames: TORC_FRAMES, fps: 4 }),
       id: "keep-torc",
-      reach: 34,
+      reach: 56,
       label: "TAKE THE TORC",
       interaction: {
         kind: "pickup",
@@ -150,9 +150,9 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(10.2, 4.7, ITEM_KEY, 15),
+      ...at(10.2, 4.7, ITEM_KEY, 15, { glow: true }),
       id: "keep-key",
-      reach: 34,
+      reach: 56,
       label: "TAKE THE IRON KEY",
       interaction: {
         kind: "pickup",
@@ -346,29 +346,27 @@ function castColumns(interior: Interior, cam: CameraState): (Hit | null)[] {
   return out;
 }
 
-/** 4x4 ordered dither — how you get flat tone out of a single ink. */
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-
-function toned(x: number, y: number, level: number): boolean {
-  return BAYER[(y & 3) * 4 + (x & 3)] < level * 16;
-}
-
-/**
- * The tone ladder. Four steps is all a one-ink display can hold apart;
- * anything finer turns into the uniform screen-door that gave the walls
- * their "textured" look in the first place.
- */
-const TONES = [0.5, 0.34, 0.2, 0.1];
-
 /**
  * Walls as flat FACES, not textured columns: group the columns that hit the
- * same wall face, fill each with one ordered-dither tone, and outline it.
- * Faces turned away from the eye carry less tone — Knight Lore's trick for
- * reading a corner without spending a second colour, and the reason a
- * chamber reads as solid stone rather than a tiled grid.
+ * same wall face, fill it solid BLACK, and draw it in white line-work — the
+ * keep's facade seen from the inside, and the same polarity as everything
+ * else in the game. Solid is the point either way: a dithered face lets what
+ * is behind it show through and reads as mesh. Filling with paper rather
+ * than ink is what keeps a chamber from turning the screen white.
+ *
+ * With the body black, every line carries the geometry: the joint where the
+ * wall meets floor and ceiling, the vertical seam at each corner, and a
+ * course line partway up to give the stone a scale to be read against.
  */
-function drawWalls(s: Screen, interior: Interior, cam: CameraState): void {
+function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Array {
   const hits = castColumns(interior, cam);
+  // Per-column wall distance, handed to the billboard pass so stone can hide
+  // what stands behind it. Infinity where the ray escaped the plan.
+  const depth = new Float32Array(SCREEN_W).fill(Infinity);
+  for (let i = 0; i < SCREEN_W; i++) {
+    const hit = hits[i];
+    if (hit) depth[i] = hit.z;
+  }
   let x = 0;
   while (x < SCREEN_W) {
     const face = hits[x];
@@ -390,12 +388,12 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): void {
       end++;
     }
 
-    // ONE flat tone for the whole face, picked from a short ladder. Flat
-    // shading is the point: a face that shades smoothly reads as a textured
-    // surface, a face that holds one tone reads as a plane of stone.
+    // The palette has exactly two whites, so the line-work's brightness can
+    // encode ONE thing, and distance is the one worth having: the near walls
+    // of a chamber come forward and the far ones sit back, which is the only
+    // depth cue left once every face is the same black.
     const mid = hits[(x + end) >> 1] ?? face;
-    const band = mid.z < 150 ? 0 : mid.z < 320 ? 1 : mid.z < 640 ? 2 : 3;
-    const level = TONES[Math.min(TONES.length - 1, band + (face.side === 0 ? 1 : 0))];
+    const line = mid.z < 200 ? BW : W;
 
     for (let cx = x; cx <= end; cx++) {
       const col = hits[cx];
@@ -403,19 +401,19 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): void {
       const y0 = Math.max(0, Math.ceil(col.top));
       const y1 = Math.min(HUD_TOP - 1, Math.floor(col.bot));
       if (y1 < y0) continue;
-      // Adjacent lit faces are parted by a black seam, and the wall meets
-      // ceiling and floor on a bright line — Ultimate's grammar for reading
-      // solid geometry with one ink.
+      // A course line one third down the face. Without it a tall wall is two
+      // lines a long way apart and the eye has nothing to judge its height
+      // by; with it the stone has a scale.
+      const course = y0 + Math.round((y1 - y0) / 3);
       const seam = cx === x || cx === end;
       for (let y = y0; y <= y1; y++) {
         const i = y * SCREEN_W + cx;
-        if (y === y0 || y === y1) s.fb[i] = BW;
-        else if (seam) s.fb[i] = K;
-        else if (toned(cx, y, level)) s.fb[i] = W;
+        s.fb[i] = y === y0 || y === y1 || y === course || seam ? line : K;
       }
     }
     x = end + 1;
   }
+  return depth;
 }
 
 // ------------------------------------------------------------------- frame
@@ -436,7 +434,7 @@ export function renderInterior(
     }
   }
   drawFloor(s, interior, cam);
-  drawWalls(s, interior, cam);
+  const depth = drawWalls(s, interior, cam);
   s.attributePass(0, HUD_TOP);
-  drawBillboards(s, cam, [...interior.props, ...visibleActors, ...entities], t);
+  drawBillboards(s, cam, [...interior.props, ...visibleActors, ...entities], t, depth);
 }

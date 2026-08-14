@@ -281,8 +281,15 @@ export class Game {
 
   render(screen: Screen): void {
     const overlay = this.overlay();
+    // The haloed actor is the one the key would act on — the same test the
+    // prompt uses, so the two can never disagree about what you are near.
+    const near = this.talk ? null : this.nearby();
+    const halo = <T extends Actor>(a: T) =>
+      a.id === near?.id ? { ...a, highlight: true } : a;
     if (this.interior) {
-      const visible = this.interior.actors.filter((a) => !this.taken.has(a.id));
+      const visible = this.interior.actors
+        .filter((a) => !this.taken.has(a.id))
+        .map(halo);
       renderInterior(screen, this.interior, this.cam, [], this.t, visible);
       drawOverlay(screen, this.hud, this.t, overlay);
       return;
@@ -290,7 +297,7 @@ export class Game {
     renderFrame(
       screen,
       this.cam,
-      [...this.wraiths, ...DENIZENS],
+      [...this.wraiths, ...DENIZENS.map(halo)],
       this.hud,
       this.t,
       overlay,

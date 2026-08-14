@@ -2,6 +2,7 @@
 // that is what makes gliding through the keep gate feel continuous rather
 // than like two different games stitched together.
 
+import { BC, BW, C, K } from "@/lib/rpg/palette";
 import { HORIZON, HUD_TOP, SCREEN_W, type Screen, type Sprite } from "@/lib/rpg/screen";
 
 /** Distance from eye to projection plane, in pixels. */
@@ -55,6 +56,14 @@ export interface Billboard {
   /** Cycled at `fps` when present, for flame flicker and the like. */
   frames?: readonly Sprite[];
   fps?: number;
+  /**
+   * Stands in a pool of ley-light. Reserved for things you can carry off:
+   * the ley marks what it wants moved, which is why people never glow and
+   * items always do.
+   */
+  glow?: boolean;
+  /** Within arm's reach — draw it haloed, so "now" is unmistakable. */
+  highlight?: boolean;
 }
 
 /**
@@ -66,6 +75,8 @@ export function drawBillboards(
   cam: CameraState,
   items: readonly Billboard[],
   t = 0,
+  /** Per-column wall distance from the interior raycaster; null outdoors. */
+  depth: Float32Array | null = null,
 ): void {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
@@ -76,6 +87,8 @@ export function drawBillboards(
     h: number;
     sprite: Sprite;
     landmark?: boolean;
+    glow?: boolean;
+    highlight?: boolean;
   }[] = [];
 
   for (const it of items) {
@@ -107,16 +120,98 @@ export function drawBillboards(
     // Elevated props hang above the floor — a sconce on a wall, not a lamp
     // standing on the flags.
     const baseY = groundRow(z) - ((it.elevate ?? 0) * FOCAL) / z;
-    drawn.push({ z, screenX, baseY, h, sprite, landmark: it.landmark });
+    drawn.push({
+      z,
+      screenX,
+      baseY,
+      h,
+      sprite,
+      landmark: it.landmark,
+      glow: it.glow,
+      highlight: it.highlight,
+    });
   }
 
   drawn.sort((a, b) => b.z - a.z);
   for (const it of drawn) {
     const w = (it.h * it.sprite.w) / it.sprite.h;
+    const footY = Math.min(it.baseY, HUD_TOP);
     // Far billboards dissolve into the dark like the terrain does — but
     // landmarks never do: they already swap to low-detail LOD art at range,
     // and a dithered castle reads as noise instead of a destination.
     const dither = it.landmark ? 0 : it.z > 1600 ? 2 : it.z > 800 ? 1 : 0;
-    s.blitScaled(it.sprite, it.screenX, Math.min(it.baseY, HUD_TOP), w, it.h, dither);
+    // The pool goes down first, so the thing standing in it occludes it.
+    if (it.glow) drawGlow(s, it.screenX, footY, w, t, depth, it.z);
+    if (it.highlight) drawHalo(s, it.sprite, it.screenX, footY, w, it.h, depth, it.z);
+    s.blitScaled(it.sprite, it.screenX, footY, w, it.h, dither, undefined, depth, it.z);
+  }
+}
+
+/**
+ * A pool of ley-light on the floor. Dithered rather than solid — a filled
+ * cyan blob reads as a painted disc, a dithered one reads as light — and
+ * breathing slowly so it is never mistaken for a flagstone.
+ */
+function drawGlow(
+  s: Screen,
+  cx: number,
+  baseY: number,
+  w: number,
+  t: number,
+  depth: Float32Array | null,
+  z: number,
+): void {
+  const pulse = 1 + Math.sin(t * 2.2) * 0.12;
+  const rx = Math.max(3, Math.round(w * 0.7 * pulse));
+  const ry = Math.max(2, Math.round(rx * 0.42));
+  // A small pool cannot afford to be dithered: half of three pixels is one,
+  // and one cyan pixel in front of a dithered wall is indistinguishable from
+  // the wall. Close up it dithers, far off it goes solid — the opposite of
+  // the distance fade, and the only way it survives the far end of the hall.
+  const solid = rx <= 7;
+  for (let dy = -ry; dy <= ry; dy++) {
+    for (let dx = -rx; dx <= rx; dx++) {
+      const n = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+      if (n > 1) continue;
+      const x = Math.round(cx) + dx;
+      const y = Math.round(baseY) + dy;
+      if (y < HORIZON || y >= HUD_TOP) continue;
+      if (depth && x >= 0 && x < SCREEN_W && depth[x] < z) continue;
+      if (!solid && ((x + y) & 1) !== 0) continue;
+      s.px(x, y, n < 0.4 ? BC : C);
+    }
+  }
+}
+
+/**
+ * The silhouette smeared outward and painted — the cheap way to outline a
+ * sprite when you cannot afford a second copy of the art. Two rings, not
+ * one: black on the outside, bright white inside it. A lone bright ring is
+ * invisible against a near wall (both are bright white) and a lone black one
+ * is invisible against the floor, so the pair is what makes "in reach" read
+ * everywhere in the room. Billboards draw after the attribute pass, so both
+ * rings keep their colour whatever cell they land in.
+ */
+function drawHalo(
+  s: Screen,
+  sprite: Sprite,
+  cx: number,
+  baseY: number,
+  w: number,
+  h: number,
+  depth: Float32Array | null,
+  z: number,
+): void {
+  const ring = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ];
+  for (const [ox, oy] of ring) {
+    s.blitScaled(sprite, cx + ox * 2, baseY + oy * 2, w, h, 0, K, depth, z);
+  }
+  for (const [ox, oy] of ring) {
+    s.blitScaled(sprite, cx + ox, baseY + oy, w, h, 0, BW, depth, z);
   }
 }
