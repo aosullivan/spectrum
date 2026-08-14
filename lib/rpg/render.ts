@@ -24,7 +24,7 @@ import {
   type CameraState,
 } from "@/lib/rpg/projection";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
-import { featuresNear, groundColour } from "@/lib/rpg/world";
+import { DEAD_WOOD_X, featuresNear, groundColour } from "@/lib/rpg/world";
 
 export type { Billboard as WorldEntity, CameraState };
 
@@ -42,8 +42,9 @@ function wrapAngle(a: number): number {
 
 const MOON_AZIMUTH = 5.1;
 
-function drawSky(s: Screen, yaw: number): void {
+function drawSky(s: Screen, yaw: number, dead: boolean): void {
   const scroll = Math.round(yaw * SKY_PX_PER_RAD);
+  const skyline = dead ? W : G;
   // Sparse cold stars, anchored to azimuth so they wheel as you turn.
   for (let y = 2; y < HORIZON - 3; y += 3) {
     for (let x = 0; x < SCREEN_W; x += 7) {
@@ -60,15 +61,15 @@ function drawSky(s: Screen, yaw: number): void {
   // Broken horizon line and the haunted-forest skyline, azimuth-anchored.
   for (let x = 0; x < SCREEN_W; x++) {
     const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
-    if (((wx >> 2) & 1) === 0 && hash(wx, 59) < 700) s.px(x, HORIZON - 1, G);
+    if (((wx >> 2) & 1) === 0 && hash(wx, 59) < 700) s.px(x, HORIZON - 1, skyline);
     const t = hash(wx - (wx % 23), 777);
     if (t < 160) {
       const tx = (t % 19) + wx - (wx % 23);
       if (tx === wx) {
         const th = 3 + (t % 3);
-        for (let k = 0; k < th; k++) s.px(x, HORIZON - 2 - k, G);
-        s.px(x - 1, HORIZON - 2 - th, G);
-        s.px(x + 1, HORIZON - 1 - th + (t % 2), G);
+        for (let k = 0; k < th; k++) s.px(x, HORIZON - 2 - k, skyline);
+        s.px(x - 1, HORIZON - 2 - th, skyline);
+        s.px(x + 1, HORIZON - 1 - th + (t % 2), skyline);
       }
     }
   }
@@ -315,7 +316,7 @@ export function renderFrame(
   overlay?: OverlayState,
 ): void {
   s.clear();
-  drawSky(s, cam.yaw);
+  drawSky(s, cam.yaw, cam.x < DEAD_WOOD_X);
   const ley = drawGround(s, cam, t);
   s.attributePass(0, HUD_TOP);
   for (let i = 0; i < ley.length; i += 2) s.fb[ley[i]] = ley[i + 1];

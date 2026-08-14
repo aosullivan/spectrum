@@ -42,7 +42,8 @@ const GROVE_R = 190;
  * GREENWOOD_EDGE_X it becomes living greenwood: oak, birch, bracken, and
  * the henge. Between them lies the open moor with the leyline running north.
  */
-const WOODS_EDGE_X = -260;
+export const DEAD_WOOD_X = -260;
+const WOODS_EDGE_X = DEAD_WOOD_X;
 const GREENWOOD_EDGE_X = 260;
 /** The henge stands deep in the greenwood. */
 export const HENGE_POS = { x: 760, y: 760 };
@@ -117,7 +118,8 @@ export function groundColour(
   const tx = Math.floor(wx / cell);
   const ty = Math.floor(wy / cell);
   const th = hash(tx, ty);
-  const lively = woods ? 420 : greenwood ? 560 : 170;
+  // The old forest is dying: barely any ground cover left under it.
+  const lively = woods ? 90 : greenwood ? 560 : 170;
   const density = footprint > 9 ? 25 : footprint > 3 ? 70 : lively;
   if (th < (footprint <= 3 ? lively : density)) {
     const px = tx * cell + (th % cell);
