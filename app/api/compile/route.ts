@@ -10,8 +10,14 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type CompileResult =
-  | { ok: true; tap: Buffer; log: string }
+  | { ok: true; binary: Buffer; log: string }
   | { ok: false; error: string; log: string };
+
+// A .tap goes through the emulated tape deck, which costs ten seconds of
+// loading screen per run. A .sna is a RAM image the emulator restores in one
+// go — 49K on the wire instead of 4K, and worth it for the iteration loop.
+// .tap is still what you'd hand to a real Spectrum, so it stays available.
+type Format = "sna" | "tap";
 
 const MAX_SOURCE_BYTES = 1_000_000;
 
@@ -36,30 +42,37 @@ function runProcess(
   });
 }
 
+// `-subtype=sna` is the only difference between the two outputs; everything
+// else about the build is identical.
+function zccArgs(outBase: string, srcPath: string, format: Format): string[] {
+  return [
+    "+zx",
+    "-vn",
+    "-SO3",
+    "-clib=sdcc_iy",
+    ...(format === "sna" ? ["-subtype=sna"] : []),
+    "-o",
+    outBase,
+    srcPath,
+    "-create-app",
+  ];
+}
+
 async function compileWithLocalZcc(
   source: string,
   dir: string,
   label: string,
+  format: Format,
 ): Promise<CompileResult | null> {
   const zcc = process.env.ZCC ?? "zcc";
   const srcPath = join(dir, "game.c");
   const outBase = join(dir, "game");
-  const tapPath = `${outBase}.tap`;
 
   await writeFile(srcPath, source);
 
   const { code, stdout, stderr, err } = await runProcess(
     zcc,
-    [
-      "+zx",
-      "-vn",
-      "-SO3",
-      "-clib=sdcc_iy",
-      "-o",
-      outBase,
-      srcPath,
-      "-create-app",
-    ],
+    zccArgs(outBase, srcPath, format),
     dir,
   );
 
@@ -74,10 +87,10 @@ async function compileWithLocalZcc(
   }
 
   try {
-    const tap = await readFile(tapPath);
-    return { ok: true, tap, log };
+    const binary = await readFile(`${outBase}.${format}`);
+    return { ok: true, binary, log };
   } catch {
-    return { ok: false, error: "Compiled, but no .tap output produced", log };
+    return { ok: false, error: `Compiled, but no .${format} output produced`, log };
   }
 }
 
@@ -85,6 +98,7 @@ async function compileWithDocker(
   source: string,
   dir: string,
   label: string,
+  format: Format,
 ): Promise<CompileResult | null> {
   const srcPath = join(dir, "game.c");
   await writeFile(srcPath, source);
@@ -109,14 +123,7 @@ async function compileWithDocker(
       "/src",
       "z88dk/z88dk:latest",
       "zcc",
-      "+zx",
-      "-vn",
-      "-SO3",
-      "-clib=sdcc_iy",
-      "-o",
-      "game",
-      "game.c",
-      "-create-app",
+      ...zccArgs("game", "game.c", format),
     ],
     dir,
   );
@@ -128,10 +135,10 @@ async function compileWithDocker(
   }
 
   try {
-    const tap = await readFile(join(dir, "game.tap"));
-    return { ok: true, tap, log };
+    const binary = await readFile(join(dir, `game.${format}`));
+    return { ok: true, binary, log };
   } catch {
-    return { ok: false, error: "Compiled, but no .tap output produced", log };
+    return { ok: false, error: `Compiled, but no .${format} output produced`, log };
   }
 }
 
@@ -149,7 +156,7 @@ function parseFirstError(log: string, srcPath: string, label: string): string | 
 }
 
 export async function POST(req: NextRequest) {
-  let body: { source?: unknown; path?: unknown };
+  let body: { source?: unknown; path?: unknown; format?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -188,12 +195,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Source too large" }, { status: 413 });
   }
 
+  if (body.format !== undefined && body.format !== "sna" && body.format !== "tap") {
+    return NextResponse.json({ error: "format must be 'sna' or 'tap'" }, { status: 400 });
+  }
+  const format: Format = body.format === "tap" ? "tap" : "sna";
+
   const dir = await mkdtemp(join(tmpdir(), "spectrum-build-"));
 
   try {
-    let result = await compileWithLocalZcc(source, dir, label);
+    let result = await compileWithLocalZcc(source, dir, label, format);
     if (result === null) {
-      result = await compileWithDocker(source, dir, label);
+      result = await compileWithDocker(source, dir, label, format);
     }
     if (result === null) {
       return NextResponse.json(
@@ -213,11 +225,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return new NextResponse(new Uint8Array(result.tap), {
+    return new NextResponse(new Uint8Array(result.binary), {
       status: 200,
       headers: {
         "Content-Type": "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${label.replace(/\.c$/, "")}.tap"`,
+        "Content-Disposition": `attachment; filename="${label.replace(/\.c$/, "")}.${format}"`,
+        "X-Spectrum-Format": format,
         "Cache-Control": "no-store",
       },
     });

@@ -14,7 +14,7 @@ int main(void) {
     // The sdcc_iy console driver does not implement the BASIC AT control
     // code, so lay the text out with plain newlines and spaces.
     printf("\n\n     HELLO, SPECTRUM!\n\n");
-    printf("  Edited on disk, rebuilt.\n\n\n");
+    printf("  Built from games/hello.c\n\n\n");
     printf("     Press any key...\n");
 
     in_wait_key();

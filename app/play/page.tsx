@@ -11,15 +11,17 @@ export const metadata: Metadata = {
 export default async function PlayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ src?: string | string[] }>;
+  searchParams: Promise<{ src?: string | string[]; keys?: string | string[] }>;
 }) {
-  const { src } = await searchParams;
+  const { src, keys } = await searchParams;
   const raw = Array.isArray(src) ? src[0] : src;
 
   // "hello.c", "games/hello.c" and "./games/hello.c" all name the same file;
   // normalise here so the header and the compile request agree.
   const name = raw?.replace(/^[./]+/, "").replace(/^games\//, "");
-  if (name) return <Player src={name} />;
+  if (name) {
+    return <Player src={name} keys={Array.isArray(keys) ? keys[0] : keys} />;
+  }
 
   const games = await listGames();
 
