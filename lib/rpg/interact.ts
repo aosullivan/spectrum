@@ -19,6 +19,10 @@ export type Interaction =
    * gem lit. Repeatable — the pool does not run out.
    */
   | { kind: "bless"; name: string; lines: readonly string[]; gem: number }
+  /** Step through into another interior — a stair door, a inner gate. */
+  | { kind: "enter"; site: string }
+  /** Climb out of the top of a stair onto a roof. */
+  | { kind: "roof" }
   | { kind: "exit" };
 
 export interface Actor extends Billboard {

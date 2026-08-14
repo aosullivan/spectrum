@@ -20,6 +20,9 @@ import {
   CAM_HEIGHT,
   FOCAL,
   drawBillboards,
+  eyeHeight,
+  eyeOf,
+  forward,
   type Billboard,
   type CameraState,
 } from "@/lib/rpg/projection";
@@ -88,9 +91,12 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
   const cos = Math.cos(cam.yaw);
   const cx = cam.x - sin * CAM_BACK;
   const cy = cam.y - cos * CAM_BACK;
+  const eyeY = eyeHeight(cam);
   for (let sy = HORIZON; sy < HUD_TOP; sy++) {
     const depth = sy - HORIZON || 0.5;
-    const z = (CAM_HEIGHT * FOCAL) / depth;
+    // Raising the eye pushes the same screen row further out across the
+    // moor — the whole trick behind the view from the tower top.
+    const z = (eyeY * FOCAL) / depth;
     // Distance dither: detail thins as the world recedes into the dark.
     const fade = z > 2200 ? 3 : z > 1200 ? 2 : z > 650 ? 1 : 0;
     const footprint = z / FOCAL;
@@ -306,6 +312,40 @@ export function drawOverlay(
   drawHud(s, hud);
 }
 
+/**
+ * Stone leads under the mage's feet: a floor plane at `height`, drawn only
+ * where it lies inside the platform's footprint so the moor still shows
+ * beyond the battlements. Without this you can see the ground straight
+ * through the roof you are standing on.
+ */
+function drawPlatform(
+  s: Screen,
+  cam: CameraState,
+  plat: { x: number; y: number; half: number; height: number },
+): void {
+  const { fx, fy } = forward(cam.yaw);
+  const { ex, ey } = eyeOf(cam);
+  // Height of the eye above the platform, not above the moor.
+  const above = eyeHeight(cam) - plat.height;
+  if (above <= 0) return;
+  for (let sy = HORIZON + 1; sy < HUD_TOP; sy++) {
+    const dist = (above * FOCAL) / (sy - HORIZON);
+    if (dist > plat.half * 3) continue;
+    for (let sx = 0; sx < SCREEN_W; sx++) {
+      const lat = ((sx - 128) * dist) / FOCAL;
+      const wx = ex + fx * dist + fy * lat;
+      const wy = ey + fy * dist - fx * lat;
+      if (Math.abs(wx - plat.x) > plat.half || Math.abs(wy - plat.y) > plat.half) {
+        continue;
+      }
+      // Big flags, sparse joints — the same language as the floors below.
+      const jx = ((wx % 48) + 48) % 48;
+      const jy = ((wy % 48) + 48) % 48;
+      s.fb[sy * SCREEN_W + sx] = jx < 1.4 || jy < 1.4 ? W : K;
+    }
+  }
+}
+
 export function renderFrame(
   s: Screen,
   cam: CameraState,
@@ -313,12 +353,20 @@ export function renderFrame(
   hud: HudState,
   t: number,
   overlay?: OverlayState,
+  /** Features to leave out — you cannot see the keep from its own roof. */
+  omit?: ReadonlySet<string>,
+  /** A raised stone surface you are standing on, e.g. the keep's leads. */
+  platform?: { x: number; y: number; half: number; height: number },
 ): void {
   s.clear();
   drawSky(s, cam.yaw);
   const ley = drawGround(s, cam, t);
+  if (platform) drawPlatform(s, cam, platform);
   s.attributePass(0, HUD_TOP);
   for (let i = 0; i < ley.length; i += 2) s.fb[ley[i]] = ley[i + 1];
-  drawBillboards(s, cam, [...featuresNear(cam.x, cam.y, 900), ...entities]);
+  const features = featuresNear(cam.x, cam.y, 900).filter(
+    (f) => !(f.id && omit?.has(f.id)),
+  );
+  drawBillboards(s, cam, [...features, ...entities], t);
   drawOverlay(s, hud, t, overlay);
 }

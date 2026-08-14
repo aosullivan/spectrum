@@ -137,6 +137,8 @@ export function groundColour(
 // ------------------------------------------------------------------ features
 
 export interface Feature {
+  /** Named so a scene can omit it — you cannot see the keep from its roof. */
+  id?: string;
   x: number;
   y: number;
   sprite: Sprite;
@@ -169,6 +171,7 @@ const KEEP_LOD = [
 /** The fixed, hand-placed world: the keep and the stone circle. */
 const PLACED: Feature[] = [
   {
+    id: "keep",
     x: KEEP_POS.x,
     y: KEEP_POS.y,
     sprite: KEEP_FAR,

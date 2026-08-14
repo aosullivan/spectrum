@@ -10,16 +10,17 @@ import type { Actor } from "@/lib/rpg/interact";
 import {
   BANNER,
   BRAZIER,
-  INNER_ARCH,
   LEY_FONT,
   TORCH_FLAME_ALT,
   WALL_TORCH,
 } from "@/lib/rpg/props";
+import { ROOF_HATCH, STAIR_DOOR } from "@/lib/rpg/tower";
 import {
   CAM_BACK,
   CAM_HEIGHT,
   FOCAL,
   drawBillboards,
+  eyeHeight,
   eyeOf,
   forward,
   groundRow,
@@ -40,6 +41,8 @@ import {
 export const CELL = 64;
 /** Wall height in world units. */
 const WALL_H = 104;
+/** How high the keep's roof stands above the moor. */
+export const ROOF_HEIGHT = 108;
 
 export interface Interior {
   readonly id: string;
@@ -51,6 +54,26 @@ export interface Interior {
   readonly props: readonly Billboard[];
   /** Where a ley vein runs across the floor, in cell x. */
   readonly leyCellX: number;
+  /**
+   * A stair: as the mage walks from `baseY` to `topY` (world units) the
+   * floor under her rises from 0 to `rise`. Continuous, so the climb is
+   * real time rather than a cut to another room.
+   */
+  readonly climb?: { baseY: number; topY: number; rise: number };
+  /**
+   * Height of this room's walls. A stair shaft needs walls taller than the
+   * climb itself, or you rise above your own stonework and the shaft turns
+   * into a fence.
+   */
+  readonly wallHeight?: number;
+}
+
+/** Floor height under a point in this interior. Flat rooms return 0. */
+export function floorHeightAt(interior: Interior, y: number): number {
+  const c = interior.climb;
+  if (!c) return 0;
+  const t = (c.baseY - y) / (c.baseY - c.topY);
+  return c.rise * Math.max(0, Math.min(1, t));
 }
 
 /** A prop placed by grid cell rather than raw world units. */
@@ -88,7 +111,6 @@ export const KEEP_INTERIOR: Interior = {
   props: [
     // The sanctum, and what the whole crossing was for.
     at(6, 1.3, LEY_FONT, 34, { solid: 17 }),
-    at(6, 3.4, INNER_ARCH, 76),
     // Great hall: braziers at the corners, banners on the far wall.
     at(1.2, 4.6, BRAZIER, 30, { solid: 12 }),
     at(10.8, 4.6, BRAZIER, 30, { solid: 12 }),
@@ -101,6 +123,14 @@ export const KEEP_INTERIOR: Interior = {
     at(7.85, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES }),
   ],
   actors: [
+    {
+      // The archway that used to be scenery: now the way up the tower.
+      ...at(6, 3.35, STAIR_DOOR, 76),
+      id: "keep-stair",
+      reach: 48,
+      label: "CLIMB THE TOWER STAIR",
+      interaction: { kind: "enter", site: "tower" },
+    },
     {
       ...at(6, 8.7, EXIT_ARCH, 82),
       id: "keep-exit",
@@ -162,6 +192,51 @@ export const KEEP_INTERIOR: Interior = {
     },
   ],
   leyCellX: 6,
+};
+
+/**
+ * The keep's stair: a straight flight rising the height of the wall. Walk
+ * north and the floor comes up under you; the shaft's stonework slides down
+ * past the eye as you go. 'X' at the foot returns you to the great hall.
+ */
+export const TOWER_INTERIOR: Interior = {
+  id: "tower",
+  plan: [
+    "#####",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "##X##",
+  ],
+  props: [
+    at(1.4, 5.6, WALL_TORCH, 20, { elevate: 34, frames: TORCH_FRAMES }),
+    at(3.6, 3.4, WALL_TORCH, 20, { elevate: 34, frames: TORCH_FRAMES }),
+  ],
+  actors: [
+    {
+      ...at(2, 1.15, ROOF_HATCH, 26),
+      id: "tower-roof",
+      reach: 48,
+      label: "CLIMB OUT ONTO THE ROOF",
+      interaction: { kind: "roof" },
+    },
+    {
+      ...at(2, 7, STAIR_DOOR, 60),
+      id: "tower-down",
+      reach: 44,
+      label: "GO BACK DOWN",
+      interaction: { kind: "exit" },
+    },
+  ],
+  leyCellX: 2,
+  // Rise the full height of the wall over the length of the flight.
+  climb: { baseY: 7 * CELL, topY: 1.2 * CELL, rise: ROOF_HEIGHT },
+  // Stonework well above the top of the climb, so there is always shaft
+  // overhead however high she has risen.
+  wallHeight: ROOF_HEIGHT + WALL_H,
 };
 
 export function cellAt(interior: Interior, cx: number, cy: number): string {
@@ -286,6 +361,7 @@ interface Hit {
 function castColumns(interior: Interior, cam: CameraState): (Hit | null)[] {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
+  const eyeY = eyeHeight(cam);
   const rx = fy;
   const ry = -fx;
   const px = ex / CELL;
@@ -339,8 +415,12 @@ function castColumns(interior: Interior, cam: CameraState): (Hit | null)[] {
       mapY,
       side,
       z,
-      top: heightRow(WALL_H, z),
-      bot: groundRow(z),
+      // Walls are anchored to absolute zero, so climbing brings their tops
+      // down toward the eye — the sensation of rising through a shaft. The
+      // base is clipped to the floor at the mage's feet, which hides the
+      // stonework below the step she is standing on.
+      top: heightRow(interior.wallHeight ?? WALL_H, z, eyeY),
+      bot: Math.min(groundRow(z, eyeY), groundRow(z)),
     });
   }
   return out;

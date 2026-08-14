@@ -11,12 +11,22 @@ import {
 } from "@/lib/rpg/interact";
 import {
   KEEP_INTERIOR,
+  ROOF_HEIGHT,
+  TOWER_INTERIOR,
   entryOf,
+  floorHeightAt,
   onExit,
   resolveInteriorMove,
   type Interior,
 } from "@/lib/rpg/interior";
 import { renderInterior } from "@/lib/rpg/interior";
+import {
+  ROOF_ACTORS,
+  ROOF_PLATFORM,
+  ROOF_PROPS,
+  resolveRoofMove,
+  roofEntry,
+} from "@/lib/rpg/roof";
 import type { Billboard, CameraState } from "@/lib/rpg/projection";
 import {
   drawOverlay,
@@ -63,6 +73,9 @@ const GLIDE_SPEED = 78; // world units/s
 const BOOST_SPEED = 140;
 const REVERSE_SPEED = 40;
 const ACCEL = 240;
+/** From the leads, the keep is under your feet — never in front of you. */
+const OMIT_ON_ROOF: ReadonlySet<string> = new Set(["keep"]);
+
 /** Indoors the mage drifts a little slower — the chambers are close. */
 const INDOOR_SCALE = 0.85;
 
@@ -85,6 +98,10 @@ export class Game {
   private t = 0;
   /** Null outdoors; the room plan when inside a site. */
   private interior: Interior | null = null;
+  /** True when standing on the leads at the top of the keep. */
+  private onRoof = false;
+  /** Where to put her back when she descends a storey. */
+  private innerReturn: CameraState | null = null;
   private doorstep: Doorstep = { x: 0, y: 0, yaw: 0 };
   /** Blocks re-triggering the doorway you are standing in. */
   private transitionLock = false;
@@ -162,12 +179,21 @@ export class Game {
 
     const nextX = this.cam.x + Math.sin(this.cam.yaw) * this.speed * dt;
     const nextY = this.cam.y + Math.cos(this.cam.yaw) * this.speed * dt;
-    const moved = this.interior
-      ? resolveInteriorMove(this.interior, this.cam.x, this.cam.y, nextX, nextY)
-      : resolveMove(this.cam.x, this.cam.y, nextX, nextY);
+    const moved = this.onRoof
+      ? resolveRoofMove(nextX, nextY)
+      : this.interior
+        ? resolveInteriorMove(this.interior, this.cam.x, this.cam.y, nextX, nextY)
+        : resolveMove(this.cam.x, this.cam.y, nextX, nextY);
     if (moved.x === this.cam.x && moved.y === this.cam.y) this.speed = 0;
     this.cam.x = moved.x;
     this.cam.y = moved.y;
+
+    // The floor comes up under her on a stair; on the roof it is simply high.
+    this.cam.elev = this.onRoof
+      ? ROOF_HEIGHT
+      : this.interior
+        ? floorHeightAt(this.interior, this.cam.y)
+        : 0;
 
     this.checkDoorways();
     if (pressed) this.tryInteract();
@@ -179,9 +205,13 @@ export class Game {
     roam(DENIZENS, this.t);
   }
 
-  /** The actor the mage is close enough to act on, indoors or out. */
+  /** The actor the mage is close enough to act on, indoors, out, or aloft. */
   private nearby(): Actor | null {
-    const actors = this.interior ? this.interior.actors : DENIZENS;
+    const actors = this.onRoof
+      ? ROOF_ACTORS
+      : this.interior
+        ? this.interior.actors
+        : DENIZENS;
     return actorInReach(actors, this.cam.x, this.cam.y, this.taken);
   }
 
@@ -206,12 +236,40 @@ export class Game {
       this.taken.add(actor.id);
       this.carried.push(what.item);
       this.notice = { text: what.onTake, until: this.t + 3.5 };
+    } else if (what.kind === "enter") {
+      // Remember the doorway so "go back down" returns you to it.
+      this.innerReturn = { ...this.cam };
+      this.interior = TOWER_INTERIOR;
+      this.cam = entryOf(TOWER_INTERIOR);
+      this.speed = 0;
+      this.transitionLock = true;
+    } else if (what.kind === "roof") {
+      this.innerReturn = { ...this.cam };
+      this.onRoof = true;
+      this.cam = roofEntry();
+      this.speed = 0;
     } else {
       this.leaveInterior();
     }
   }
 
+  /** Back down one storey: roof to stair, stair to hall, hall to the moor. */
   private leaveInterior(): void {
+    if (this.onRoof) {
+      this.onRoof = false;
+      this.cam = this.innerReturn ?? entryOf(TOWER_INTERIOR);
+      this.innerReturn = null;
+      this.speed = 0;
+      return;
+    }
+    if (this.interior === TOWER_INTERIOR) {
+      this.interior = KEEP_INTERIOR;
+      this.cam = this.innerReturn ?? entryOf(KEEP_INTERIOR);
+      this.innerReturn = null;
+      this.speed = 0;
+      this.transitionLock = true;
+      return;
+    }
     this.interior = null;
     this.cam = { ...this.doorstep };
     this.speed = 0;
@@ -281,6 +339,21 @@ export class Game {
 
   render(screen: Screen): void {
     const overlay = this.overlay();
+    if (this.onRoof) {
+      // The outdoor renderer, eye raised to the leads: the moor below is the
+      // real one, only the battlements are local scenery.
+      renderFrame(
+        screen,
+        this.cam,
+        [...ROOF_PROPS, ...ROOF_ACTORS],
+        this.hud,
+        this.t,
+        overlay,
+        OMIT_ON_ROOF,
+        ROOF_PLATFORM,
+      );
+      return;
+    }
     if (this.interior) {
       const visible = this.interior.actors.filter((a) => !this.taken.has(a.id));
       renderInterior(screen, this.interior, this.cam, [], this.t, visible);

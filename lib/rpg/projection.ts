@@ -15,11 +15,23 @@ export interface CameraState {
   x: number;
   y: number;
   yaw: number;
+  /**
+   * Height of the floor under the mage, in world units. Ground level is 0;
+   * climbing the keep stair raises it. Because the camera stays level, the
+   * horizon line never moves — height simply compresses the ground plane
+   * toward it, which is exactly what looking out from a tower looks like.
+   */
+  elev?: number;
 }
 
 /** Unit forward vector for a yaw. +y is north at yaw 0. */
 export function forward(yaw: number): { fx: number; fy: number } {
   return { fx: Math.sin(yaw), fy: Math.cos(yaw) };
+}
+
+/** Height of the eye above absolute zero, for a camera at `elev`. */
+export function eyeHeight(cam: CameraState): number {
+  return CAM_HEIGHT + (cam.elev ?? 0);
 }
 
 /** The eye sits behind the hero, so the hero is visible in frame. */
@@ -28,14 +40,23 @@ export function eyeOf(cam: CameraState): { ex: number; ey: number } {
   return { ex: cam.x - fx * CAM_BACK, ey: cam.y - fy * CAM_BACK };
 }
 
+/**
+ * Screen row where a surface at world height `h` sits at depth `z`, seen
+ * from an eye `eyeY` above zero. Defaults keep the old ground-level call
+ * sites honest: groundRow(z) is still "the floor at your feet".
+ */
+export function surfaceRow(h: number, z: number, eyeY = CAM_HEIGHT): number {
+  return HORIZON + ((eyeY - h) * FOCAL) / z;
+}
+
 /** Screen row where the ground plane sits at perpendicular depth `z`. */
-export function groundRow(z: number): number {
-  return HORIZON + (CAM_HEIGHT * FOCAL) / z;
+export function groundRow(z: number, eyeY = CAM_HEIGHT): number {
+  return HORIZON + (eyeY * FOCAL) / z;
 }
 
 /** Screen row of a point `h` world units above the ground at depth `z`. */
-export function heightRow(h: number, z: number): number {
-  return HORIZON + ((CAM_HEIGHT - h) * FOCAL) / z;
+export function heightRow(h: number, z: number, eyeY = CAM_HEIGHT): number {
+  return HORIZON + ((eyeY - h) * FOCAL) / z;
 }
 
 export interface Billboard {
@@ -52,6 +73,8 @@ export interface Billboard {
   elevate?: number;
   /** Body radius in world units; omitted props can be walked through. */
   solid?: number;
+  /** World height of the floor this prop stands on (0 = the ground). */
+  stands?: number;
   /** Cycled at `fps` when present, for flame flicker and the like. */
   frames?: readonly Sprite[];
   fps?: number;
@@ -69,6 +92,7 @@ export function drawBillboards(
 ): void {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
+  const eyeY = eyeHeight(cam);
   const drawn: {
     z: number;
     screenX: number;
@@ -105,8 +129,9 @@ export function drawBillboards(
       }
     }
     // Elevated props hang above the floor — a sconce on a wall, not a lamp
-    // standing on the flags.
-    const baseY = groundRow(z) - ((it.elevate ?? 0) * FOCAL) / z;
+    // standing on the flags. `stands` lifts the whole prop to a storey, so
+    // battlements on the roof sit at roof height rather than in the mud.
+    const baseY = groundRow(z, eyeY) - (((it.elevate ?? 0) + (it.stands ?? 0)) * FOCAL) / z;
     drawn.push({ z, screenX, baseY, h, sprite, landmark: it.landmark });
   }
 
