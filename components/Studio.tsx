@@ -49,7 +49,7 @@ export function Studio() {
       const res = await fetch("/api/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source }),
+        body: JSON.stringify({ source, format: "sna" }),
       });
 
       if (!res.ok) {
@@ -68,7 +68,7 @@ export function Studio() {
         setMessage("Emulator not ready.");
         return;
       }
-      await emulatorRef.current.loadTap(buf);
+      await emulatorRef.current.load(buf, "game.sna");
       setStatus("ok");
       setMessage(`Loaded ${buf.byteLength} bytes — game running.`);
     } catch (err) {

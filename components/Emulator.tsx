@@ -39,9 +39,54 @@ declare global {
 }
 
 export type EmulatorHandle = {
-  loadTap: (bytes: Uint8Array) => Promise<void>;
+  // `filename` is not cosmetic: JSSpeccy picks its loader off the extension,
+  // so a .sna is restored as a RAM image and a .tap goes in the tape deck.
+  load: (bytes: Uint8Array, filename: string) => Promise<void>;
   reset: () => void;
+  focus: () => void;
+  sendKeys: (sequence: string) => Promise<void>;
 };
+
+// JSSpeccy's key table is looked up by legacy keyCode first, event.key second,
+// so both go on every synthetic event.
+type KeyDescriptor = { key: string; keyCode: number };
+
+const KEY_ALIASES: Record<string, KeyDescriptor> = {
+  space: { key: " ", keyCode: 32 },
+  enter: { key: "Enter", keyCode: 13 },
+  shift: { key: "Shift", keyCode: 16 },
+  up: { key: "ArrowUp", keyCode: 38 },
+  down: { key: "ArrowDown", keyCode: 40 },
+  left: { key: "ArrowLeft", keyCode: 37 },
+  right: { key: "ArrowRight", keyCode: 39 },
+};
+
+function toKey(name: string): KeyDescriptor | null {
+  const n = name.trim().toLowerCase();
+  if (n in KEY_ALIASES) return KEY_ALIASES[n];
+  // Letters and digits: the browser keyCode is the uppercase character code.
+  if (/^[a-z0-9]$/.test(n)) return { key: n, keyCode: n.toUpperCase().charCodeAt(0) };
+  return null;
+}
+
+// Hold and wait in animation frames rather than milliseconds. The emulator
+// steps the Z80 from requestAnimationFrame, so a background tab runs it at a
+// crawl — a wall-clock hold can start and end between two emulated frames and
+// never be sampled by the keyboard matrix at all.
+const DEFAULT_HOLD_FRAMES = 12;
+const GAP_FRAMES = 6;
+// z88dk's in_wait_key() waits for *no* key before it waits for one, so a key
+// already down when the program reaches it wedges the program for good. Let
+// the machine boot before touching the keyboard.
+const LEAD_FRAMES = 60;
+
+function waitFrames(count: number): Promise<void> {
+  return new Promise((resolve) => {
+    let left = count;
+    const tick = () => (left-- > 0 ? requestAnimationFrame(tick) : resolve());
+    tick();
+  });
+}
 
 let scriptLoaded: Promise<void> | null = null;
 
@@ -93,6 +138,13 @@ export const Emulator = forwardRef<EmulatorHandle, Props>(function Emulator(
   const zoomRef = useRef<number>(0);
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
+
+  // JSSpeccy builds its own container div, gives it tabIndex 0 and routes key
+  // events through it, so the Spectrum keyboard is dead until that div holds
+  // focus. Clicking the canvas does it; so does this.
+  const focusEmulator = useCallback(() => {
+    hostRef.current?.querySelector<HTMLElement>("[tabindex]")?.focus();
+  }, []);
 
   const fitToPane = useCallback(() => {
     const el = containerRef.current;
@@ -146,7 +198,7 @@ export const Emulator = forwardRef<EmulatorHandle, Props>(function Emulator(
   }, []);
 
   useImperativeHandle(ref, () => ({
-    async loadTap(bytes: Uint8Array) {
+    async load(bytes: Uint8Array, filename: string) {
       if (!instanceRef.current) throw new Error("Emulator not ready");
       if (lastUrlRef.current) URL.revokeObjectURL(lastUrlRef.current);
       const ab = bytes.buffer.slice(
@@ -154,12 +206,54 @@ export const Emulator = forwardRef<EmulatorHandle, Props>(function Emulator(
         bytes.byteOffset + bytes.byteLength,
       ) as ArrayBuffer;
       const blob = new Blob([ab], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob) + "#game.tap";
+      // Keep the bare object URL for revoking — revokeObjectURL won't match a
+      // string carrying the fragment, and 49K snapshots add up over a session
+      // of rebuilds.
+      const url = URL.createObjectURL(blob);
       lastUrlRef.current = url;
-      await instanceRef.current.openUrl(url);
+      await instanceRef.current.openUrl(`${url}#${filename}`);
     },
     reset() {
       instanceRef.current?.setMachine(48);
+    },
+    focus: focusEmulator,
+    /**
+     * Replay a key sequence into the machine: "space", "wait:120,space",
+     * "left:40,space:30". `wait:N` idles N frames, `<key>:N` holds that key
+     * for N frames.
+     */
+    async sendKeys(sequence: string) {
+      const root = hostRef.current?.querySelector<HTMLElement>("[tabindex]");
+      if (!root) throw new Error("Emulator not ready");
+      focusEmulator();
+
+      const tokens = sequence.split(",");
+      if (!/^\s*wait:/i.test(tokens[0] ?? "")) await waitFrames(LEAD_FRAMES);
+
+      for (const token of tokens) {
+        const [name, framesRaw] = token.split(":");
+        const frames = Number.parseInt(framesRaw ?? "", 10);
+
+        if (name.trim().toLowerCase() === "wait") {
+          await waitFrames(Number.isFinite(frames) ? frames : DEFAULT_HOLD_FRAMES);
+          continue;
+        }
+
+        const key = toKey(name);
+        if (!key) continue;
+
+        const init: KeyboardEventInit = {
+          key: key.key,
+          keyCode: key.keyCode,
+          which: key.keyCode,
+          bubbles: true,
+          cancelable: true,
+        };
+        root.dispatchEvent(new KeyboardEvent("keydown", init));
+        await waitFrames(Number.isFinite(frames) ? frames : DEFAULT_HOLD_FRAMES);
+        root.dispatchEvent(new KeyboardEvent("keyup", init));
+        await waitFrames(GAP_FRAMES);
+      }
     },
   }));
 
