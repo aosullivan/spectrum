@@ -2,8 +2,6 @@
 // painter-sorted billboards, the hovering hero, and the windowed HUD.
 
 import {
-  GEM_EMPTY,
-  GEM_FULL,
   HERO,
   MOON,
   RUNE_GATE,
@@ -14,15 +12,19 @@ import {
   glyph,
   textWidth,
 } from "@/lib/rpg/assets";
-import { B, BC, BG, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
+import { B, BC, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
 import {
   CAM_BACK,
-  CAM_HEIGHT,
+
   FOCAL,
   collectBillboards,
+  eyeHeight,
+  eyeOf,
+  forward,
   type Billboard,
   type CameraState,
 } from "@/lib/rpg/projection";
+import { drawPanel, type Blip } from "@/lib/rpg/panel";
 import { collectFaces } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import {
@@ -95,9 +97,12 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
   const cos = Math.cos(cam.yaw);
   const cx = cam.x - sin * CAM_BACK;
   const cy = cam.y - cos * CAM_BACK;
+  const eyeY = eyeHeight(cam);
   for (let sy = HORIZON; sy < HUD_TOP; sy++) {
     const depth = sy - HORIZON || 0.5;
-    const z = (CAM_HEIGHT * FOCAL) / depth;
+    // Raising the eye pushes the same screen row further out across the
+    // moor — the whole trick behind the view from the tower top.
+    const z = (eyeY * FOCAL) / depth;
     // Distance dither: detail thins as the world recedes into the dark.
     const fade = z > 2200 ? 3 : z > 1200 ? 2 : z > 650 ? 1 : 0;
     const footprint = z / FOCAL;
@@ -170,74 +175,35 @@ const RUNES = [RUNE_LEY, RUNE_GATE, RUNE_MOON, RUNE_WARD];
 export interface HudState {
   spellName: string;
   selectedRune: number;
-  /** 0..17 half-steps of lifeforce (17 segments, last may be half). */
+  /** 0..1. */
   lifeforce: number;
   gems: [boolean, boolean, boolean];
+  /** Where she is, named. */
+  place: string;
+  /** What she is carrying. */
+  carried: readonly string[];
+  /** Everything alive near enough for the radar. */
+  blips: readonly Blip[];
+  /** Set indoors: the radar draws this room plan instead of a compass. */
+  plan?: { rows: readonly string[]; cell: number };
 }
 
-function drawHud(s: Screen, hud: HudState): void {
-  s.rect(0, HUD_TOP, 256, 40, K);
-  s.rect(0, HUD_TOP, 256, 1, W);
-  s.rect(0, 191, 256, 1, W);
-  s.rect(0, HUD_TOP, 1, 40, W);
-  s.rect(255, HUD_TOP, 1, 40, W);
-  s.rect(0, HUD_TOP + 1, 256, 1, B);
-  s.rect(0, 190, 256, 1, B);
-  for (const [px, py] of [
-    [0, HUD_TOP],
-    [254, HUD_TOP],
-    [0, 190],
-    [254, 190],
-  ]) {
-    s.rect(px, py, 2, 2, BW);
-  }
-
-  // Spell window.
-  s.rect(4, 155, 132, 1, B);
-  s.rect(4, 173, 132, 1, B);
-  s.rect(4, 155, 1, 19, B);
-  s.rect(135, 155, 1, 19, B);
-  s.blit(SPELL_DOT, 10, 161);
-  drawText(s, hud.spellName, 19, 159, 2, BY);
-
-  // Rune quick-slots.
-  for (let i = 0; i < RUNES.length; i++) {
-    const bx = 141 + i * 28;
-    const sel = i === hud.selectedRune;
-    const frame = sel ? BC : B;
-    s.rect(bx, 155, 24, 1, frame);
-    s.rect(bx, 173, 24, 1, frame);
-    s.rect(bx, 155, 1, 19, frame);
-    s.rect(bx + 23, 155, 1, 19, frame);
-    s.blit(RUNES[i], bx + 8, 160);
-    if (sel) s.rect(bx + 8, 171, 8, 1, BW);
-  }
-
-  // Lifeforce.
-  drawText(s, "LIFEFORCE", 8, 180, 1, W);
-  s.rect(52, 176, 178, 1, W);
-  s.rect(52, 188, 178, 1, W);
-  s.rect(52, 176, 1, 13, W);
-  s.rect(229, 176, 1, 13, W);
-  const full = hud.lifeforce >> 1;
-  const half = hud.lifeforce % 2 === 1;
-  for (let seg = 0; seg < 17; seg++) {
-    const sx = 54 + seg * 10;
-    if (seg < full) {
-      s.rect(sx, 179, 8, 7, G);
-      s.rect(sx, 179, 8, 1, BG);
-    } else if (seg === full && half) {
-      for (let y = 179; y < 186; y++) {
-        for (let x = sx; x < sx + 8; x++) {
-          if (((x + y) & 1) === 0) s.px(x, y, G);
-        }
-      }
-    }
-  }
-  const gems = [GEM_FULL, GEM_FULL, GEM_FULL];
-  for (let i = 0; i < 3; i++) {
-    s.blit(hud.gems[i] ? gems[i] : GEM_EMPTY, 234 + i * 7, 179);
-  }
+/** The control panel lives in its own module; this passes it the camera. */
+function drawHud(s: Screen, hud: HudState, cam: CameraState): void {
+  drawPanel(s, {
+    spellName: hud.spellName,
+    runes: RUNES,
+    selectedRune: hud.selectedRune,
+    lifeforce: hud.lifeforce,
+    gems: hud.gems,
+    carried: hud.carried,
+    place: hud.place,
+    x: cam.x,
+    y: cam.y,
+    yaw: cam.yaw,
+    blips: hud.blips,
+    plan: hud.plan,
+  });
 }
 
 // ------------------------------------------------------------ text windows
@@ -308,12 +274,47 @@ export function drawOverlay(
   s: Screen,
   hud: HudState,
   t: number,
-  overlay?: OverlayState,
+  overlay: OverlayState | undefined,
+  cam: CameraState,
 ): void {
   drawHero(s, t);
   if (overlay?.dialogue) drawDialogue(s, overlay.dialogue, t);
   else if (overlay?.prompt) drawPrompt(s, overlay.prompt);
-  drawHud(s, hud);
+  drawHud(s, hud, cam);
+}
+
+/**
+ * Stone leads under the mage's feet: a floor plane at `height`, drawn only
+ * where it lies inside the platform's footprint so the moor still shows
+ * beyond the battlements. Without this you can see the ground straight
+ * through the roof you are standing on.
+ */
+function drawPlatform(
+  s: Screen,
+  cam: CameraState,
+  plat: { x: number; y: number; half: number; height: number },
+): void {
+  const { fx, fy } = forward(cam.yaw);
+  const { ex, ey } = eyeOf(cam);
+  // Height of the eye above the platform, not above the moor.
+  const above = eyeHeight(cam) - plat.height;
+  if (above <= 0) return;
+  for (let sy = HORIZON + 1; sy < HUD_TOP; sy++) {
+    const dist = (above * FOCAL) / (sy - HORIZON);
+    if (dist > plat.half * 3) continue;
+    for (let sx = 0; sx < SCREEN_W; sx++) {
+      const lat = ((sx - 128) * dist) / FOCAL;
+      const wx = ex + fx * dist + fy * lat;
+      const wy = ey + fy * dist - fx * lat;
+      if (Math.abs(wx - plat.x) > plat.half || Math.abs(wy - plat.y) > plat.half) {
+        continue;
+      }
+      // Big flags, sparse joints — the same language as the floors below.
+      const jx = ((wx % 48) + 48) % 48;
+      const jy = ((wy % 48) + 48) % 48;
+      s.fb[sy * SCREEN_W + sx] = jx < 1.4 || jy < 1.4 ? W : K;
+    }
+  }
 }
 
 export function renderFrame(
@@ -323,19 +324,28 @@ export function renderFrame(
   hud: HudState,
   t: number,
   overlay?: OverlayState,
+  /** Features to leave out — you cannot see the keep from its own roof. */
+  omit?: ReadonlySet<string>,
+  /** A raised stone surface you are standing on, e.g. the keep's leads. */
+  platform?: { x: number; y: number; half: number; height: number },
 ): void {
   s.clear();
   drawSky(s, cam.yaw, cam.x < DEAD_WOOD_X);
   const ley = drawGround(s, cam, t);
+  if (platform) drawPlatform(s, cam, platform);
   s.attributePass(0, HUD_TOP);
   for (let i = 0; i < ley.length; i += 2) s.fb[ley[i]] = ley[i + 1];
+  const features = featuresNear(cam.x, cam.y, 900).filter(
+    (f) => !(f.id && omit?.has(f.id)),
+  );
   // Masonry and sprites are interleaved by depth, so a tree in front of the
-  // keep occludes it and one behind does not.
+  // keep occludes it and one behind does not. Standing on the keep's own
+  // leads, its masonry is omitted — you cannot see a building from inside it.
   const jobs = [
-    ...collectFaces(cam, KEEP_BOXES),
-    ...collectBillboards(cam, [...featuresNear(cam.x, cam.y, 900), ...entities], t),
+    ...(omit?.has("keep") ? [] : collectFaces(cam, KEEP_BOXES)),
+    ...collectBillboards(cam, [...features, ...entities], t),
   ];
   jobs.sort((a, b) => b.z - a.z);
   for (const j of jobs) j.paint(s);
-  drawOverlay(s, hud, t, overlay);
+  drawOverlay(s, hud, t, overlay, cam);
 }

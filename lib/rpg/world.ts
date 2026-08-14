@@ -156,6 +156,8 @@ export function groundColour(
 // ------------------------------------------------------------------ features
 
 export interface Feature {
+  /** Named so a scene can omit it — you cannot see the keep from its roof. */
+  id?: string;
   x: number;
   y: number;
   sprite: Sprite;
