@@ -4,9 +4,6 @@
 // (authored biome data arrives with the first dungeon milestone).
 
 import {
-  KEEP_FAR,
-  KEEP_MID,
-  KEEP_NEAR,
   MENHIR,
   STONE_LEANING,
   TREE_DEAD_PINE,
@@ -23,8 +20,9 @@ import {
   TREE_PINE_LIVE,
   TRILITHON,
 } from "@/lib/rpg/flora";
-import { B, BB, BC, BG, C, G, K } from "@/lib/rpg/palette";
+import { B, BB, BC, BG, C, G, K, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
+import type { Box } from "@/lib/rpg/structures";
 
 // ------------------------------------------------------------------- places
 
@@ -42,7 +40,8 @@ const GROVE_R = 190;
  * GREENWOOD_EDGE_X it becomes living greenwood: oak, birch, bracken, and
  * the henge. Between them lies the open moor with the leyline running north.
  */
-export const WOODS_EDGE_X = -260;
+export const DEAD_WOOD_X = -260;
+const WOODS_EDGE_X = DEAD_WOOD_X;
 const GREENWOOD_EDGE_X = 260;
 /** The henge stands deep in the greenwood. */
 export const HENGE_POS = { x: 760, y: 760 };
@@ -110,22 +109,42 @@ export function groundColour(
     }
   }
 
-  // --- grass tufts; both woodlands pack them denser than the open moor ---
   const woods = wx < WOODS_EDGE_X;
   const greenwood = wx > GREENWOOD_EDGE_X;
-  const cell = woods || greenwood ? 7 : 11;
+
+  // --- undergrowth: a dithered mat of living ground, laid down first ---
+  // The moor and greenwood should read as carpeted, not as bare earth with
+  // a few dashes on it. The old forest is exempt: it is dying.
+  if (!woods) {
+    const bed = hash(ix >> 1, iy >> 1);
+    const cover = greenwood ? 330 : 195;
+    if (bed < cover && (ix + iy) % 2 === 0) {
+      return bed < cover / 7 ? BG : G;
+    }
+  }
+
+  // --- and clumps of taller growth standing proud of the mat ---
+  const cell = woods ? 7 : greenwood ? 5 : 8;
   const tx = Math.floor(wx / cell);
   const ty = Math.floor(wy / cell);
   const th = hash(tx, ty);
-  const lively = woods ? 420 : greenwood ? 560 : 170;
-  const density = footprint > 9 ? 25 : footprint > 3 ? 70 : lively;
+  // The old forest is dying: barely any ground cover left under it.
+  const lively = woods ? 90 : greenwood ? 500 : 340;
+  const density = footprint > 9 ? 25 : footprint > 3 ? 90 : lively;
   if (th < (footprint <= 3 ? lively : density)) {
     const px = tx * cell + (th % cell);
     const py = ty * cell + ((th >> 4) % cell);
     const dx = ix - px;
     const dy = iy - py;
-    if (dy === 0 && dx >= -1 && dx <= 1) return greenwood && th < 60 ? BG : G;
-    if (dy === -1 && dx === 0) return G;
+    const bright = th < (greenwood ? 90 : 50);
+    if (dy === 0 && dx >= -2 && dx <= 2) return bright ? BG : G;
+    if (dy === -1 && dx >= -1 && dx <= 1) return G;
+    if (dy === -2 && dx === 0) return bright ? BG : G;
+  }
+
+  // --- loose stones scattered through it ---
+  if (!woods && hash(ix >> 2, iy >> 2) < 5 && (ix & 3) < 2 && (iy & 3) < 2) {
+    return W;
   }
 
   // --- faint world-anchored contour dashes tie the ground together ---
@@ -158,27 +177,53 @@ const CHUNK = 96;
 const chunkCache = new Map<string, Feature[]>();
 
 /**
- * The keep swaps art as it grows on screen: a horizon silhouette becomes a
- * readable castle becomes a facade with a walk-in gate. Ordered best-first
- * by the on-screen pixel height at which each level takes over.
+ * The keep, as masonry rather than a poster: two towers, a curtain wall,
+ * and a gatehouse built from two piers under a lintel — so the archway is
+ * a real hole you can see through and fly into.
  */
-const KEEP_LOD = [
-  { minH: 34, sprite: KEEP_NEAR },
-  { minH: 15, sprite: KEEP_MID },
-  { minH: 0, sprite: KEEP_FAR },
-] as const;
+export const KEEP_BOXES: readonly Box[] = [
+  { x: KEEP_POS.x - 72, y: KEEP_POS.y, w: 48, d: 48, base: 0, top: 120 },
+  { x: KEEP_POS.x + 72, y: KEEP_POS.y, w: 48, d: 48, base: 0, top: 104 },
+  { x: KEEP_POS.x, y: KEEP_POS.y + 6, w: 150, d: 28, base: 0, top: 76 },
+  { x: KEEP_POS.x - 27, y: KEEP_POS.y - 14, w: 26, d: 46, base: 0, top: 98 },
+  { x: KEEP_POS.x + 27, y: KEEP_POS.y - 14, w: 26, d: 46, base: 0, top: 98 },
+  { x: KEEP_POS.x, y: KEEP_POS.y - 14, w: 80, d: 46, base: 74, top: 98 },
+  // Crenellations: a merlon is just a small box on a parapet. The gap on
+  // the right tower is where the crown came down.
+  ...crenellate(KEEP_POS.x - 72, KEEP_POS.y, 48, 48, 120, 5),
+  ...crenellate(KEEP_POS.x + 72, KEEP_POS.y, 48, 48, 104, 5).filter(
+    (_, i) => i !== 1 && i !== 4,
+  ),
+  ...crenellate(KEEP_POS.x, KEEP_POS.y + 6, 150, 28, 76, 11),
+  ...crenellate(KEEP_POS.x, KEEP_POS.y - 14, 80, 46, 98, 6),
+];
 
-/** The fixed, hand-placed world: the keep and the stone circle. */
+/** Merlons along the top of a box: the tooth-and-gap of a battlement. */
+function crenellate(
+  cx: number,
+  cy: number,
+  w: number,
+  d: number,
+  top: number,
+  count: number,
+): Box[] {
+  const out: Box[] = [];
+  const pitch = w / count;
+  for (let i = 0; i < count; i += 2) {
+    out.push({
+      x: cx - w / 2 + pitch * (i + 0.5),
+      y: cy,
+      w: pitch * 0.86,
+      d,
+      base: top,
+      top: top + 9,
+    });
+  }
+  return out;
+}
+
+/** The fixed, hand-placed world: the stone circle and the henge. */
 const PLACED: Feature[] = [
-  {
-    id: "keep",
-    x: KEEP_POS.x,
-    y: KEEP_POS.y,
-    sprite: KEEP_FAR,
-    height: 120,
-    landmark: true,
-    lod: KEEP_LOD,
-  },
   { x: CIRCLE_POS.x, y: CIRCLE_POS.y, sprite: DOLMEN, height: 26 },
   { x: CIRCLE_POS.x - 34, y: CIRCLE_POS.y - 14, sprite: STONE_L, height: 18 },
   { x: CIRCLE_POS.x + 30, y: CIRCLE_POS.y - 10, sprite: MENHIR, height: 16 },
@@ -232,10 +277,10 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   const woods = baseX < WOODS_EDGE_X;
   const greenwood = baseX > GREENWOOD_EDGE_X;
   // A stand per wooded chunk, the odd lone tree out on the open moor.
-  const treeRolls = woods || greenwood ? 3 : 1;
+  const treeRolls = greenwood ? 5 : woods ? 4 : 1;
   for (let i = 0; i < treeRolls; i++) {
     const h = hash(cx * 5 + i, cy * 7 + i * 3);
-    if (h < (woods || greenwood ? 700 : 90)) {
+    if (h < (greenwood ? 690 : woods ? 620 : 90)) {
       const kind = h % 5;
       const living = greenwood
         ? kind < 2
@@ -258,14 +303,16 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   }
   // Bracken and scrub, only where things still grow.
   if (greenwood) {
-    const sh = hash(cx ^ 0x51ed, cy ^ 0x2f9a);
-    if (sh < 620) {
-      out.push({
-        x: baseX + (sh % CHUNK),
-        y: baseY + ((sh >> 5) % CHUNK),
-        sprite: BUSH,
-        height: 12 + (sh % 3) * 3,
-      });
+    for (let i = 0; i < 3; i++) {
+      const sh = hash((cx ^ 0x51ed) + i * 31, cy ^ 0x2f9a);
+      if (sh < 760) {
+        out.push({
+          x: baseX + (sh % CHUNK),
+          y: baseY + ((sh >> 5) % CHUNK),
+          sprite: BUSH,
+          height: 11 + (sh % 4) * 3,
+        });
+      }
     }
   }
   // Boulders and lone stones, sparse everywhere.

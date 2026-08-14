@@ -43,7 +43,7 @@ import {
   GROVE_POS,
   HENGE_POS,
   KEEP_POS,
-  WOODS_EDGE_X,
+  DEAD_WOOD_X,
   resolveMove,
 } from "@/lib/rpg/world";
 
@@ -345,10 +345,13 @@ export class Game {
       return;
     }
 
-    // Only once you are actually under the arch, not merely near the keep.
+    // A bounded box under the arch, not a half-plane: the old test was
+    // "anywhere north of this line", which swallowed anyone who walked
+    // round to the back of the keep.
     const inGate =
       Math.abs(this.cam.x - KEEP_POS.x) < GATE.halfW &&
-      this.cam.y > KEEP_POS.y - GATE.trigger;
+      this.cam.y > KEEP_POS.y - GATE.trigger &&
+      this.cam.y < KEEP_POS.y + GATE.trigger;
     if (inGate) {
       if (!this.transitionLock) {
         // Step back out facing away from the keep, clear of the arch.
@@ -379,7 +382,7 @@ export class Game {
     if (near(HENGE_POS, 260)) return "THE HENGE";
     if (near(GROVE_POS, 210)) return "THE GROVE";
     if (near(CIRCLE_POS, 160)) return "STONE CIRCLE";
-    if (this.cam.x < WOODS_EDGE_X) return "ANCIENT WOODS";
+    if (this.cam.x < DEAD_WOOD_X) return "ANCIENT WOODS";
     return "THE MOOR";
   }
 

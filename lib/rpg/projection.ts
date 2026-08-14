@@ -75,6 +75,8 @@ export interface Billboard {
   solid?: number;
   /** World height of the floor this prop stands on (0 = the ground). */
   stands?: number;
+  /** Radius in world units over which this prop throws warm light. */
+  light?: number;
   /** Cycled at `fps` when present, for flame flicker and the like. */
   frames?: readonly Sprite[];
   fps?: number;
@@ -84,12 +86,21 @@ export interface Billboard {
  * Project billboards against the camera and paint them back-to-front.
  * Shared by the open world and interiors so props behave identically in both.
  */
-export function drawBillboards(
-  s: Screen,
+export interface SpriteDraw {
+  z: number;
+  paint: (s: Screen) => void;
+}
+
+/**
+ * Project billboards and return them as depth-tagged paint jobs, so the
+ * caller can interleave them with other drawables (building faces) instead
+ * of drawing sprites strictly on top.
+ */
+export function collectBillboards(
   cam: CameraState,
   items: readonly Billboard[],
   t = 0,
-): void {
+): SpriteDraw[] {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
   const eyeY = eyeHeight(cam);
@@ -135,13 +146,28 @@ export function drawBillboards(
     drawn.push({ z, screenX, baseY, h, sprite, landmark: it.landmark });
   }
 
-  drawn.sort((a, b) => b.z - a.z);
-  for (const it of drawn) {
+  return drawn.map((it) => {
     const w = (it.h * it.sprite.w) / it.sprite.h;
     // Far billboards dissolve into the dark like the terrain does — but
     // landmarks never do: they already swap to low-detail LOD art at range,
     // and a dithered castle reads as noise instead of a destination.
     const dither = it.landmark ? 0 : it.z > 1600 ? 2 : it.z > 800 ? 1 : 0;
-    s.blitScaled(it.sprite, it.screenX, Math.min(it.baseY, HUD_TOP), w, it.h, dither);
-  }
+    return {
+      z: it.z,
+      paint: (s: Screen) =>
+        s.blitScaled(it.sprite, it.screenX, Math.min(it.baseY, HUD_TOP), w, it.h, dither),
+    };
+  });
+}
+
+/** Paint billboards alone, back to front. */
+export function drawBillboards(
+  s: Screen,
+  cam: CameraState,
+  items: readonly Billboard[],
+  t = 0,
+): void {
+  const jobs = collectBillboards(cam, items, t);
+  jobs.sort((a, b) => b.z - a.z);
+  for (const j of jobs) j.paint(s);
 }

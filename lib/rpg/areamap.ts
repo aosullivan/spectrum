@@ -12,7 +12,7 @@ import {
   GROVE_POS,
   HENGE_POS,
   KEEP_POS,
-  WOODS_EDGE_X,
+  DEAD_WOOD_X,
 } from "@/lib/rpg/world";
 
 /** The charted region. Beyond it the map has nothing to say. */
@@ -108,7 +108,7 @@ export function drawAreaMap(
         // Dead woodland to the west: sparser and dimmer than the grove, and
         // with a ragged edge — a treeline is not a ruled boundary.
         const fray = Math.sin(wy * 0.011) * 46 + Math.sin(wy * 0.031) * 22;
-        if (wx < WOODS_EDGE_X + fray && (px * 3 + py) % 6 === 0) {
+        if (wx < DEAD_WOOD_X + fray && (px * 3 + py) % 6 === 0) {
           s.px(px, py, G);
         }
       }
