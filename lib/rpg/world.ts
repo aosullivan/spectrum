@@ -5,6 +5,7 @@
 
 import {
   MENHIR,
+  MENHIR_LEY,
   STONE_LEANING,
   TREE_DEAD_PINE,
   TREE_GNARLED_A,
@@ -13,7 +14,7 @@ import {
 import { DOLMEN, STONE_L, STONE_M, STONE_S } from "@/lib/rpg/assets";
 import {
   BUSH,
-  FALLEN_LOG,
+  FALLEN_LOGS,
   MUSHROOM_PATCH,
   SARSEN_FALLEN,
   SARSEN_TALL,
@@ -389,10 +390,12 @@ const PLACED: Feature[] = [
   // visible in the reference frame while remaining ordinary world objects.
   { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
   { x: -138, y: 236, sprite: SARSEN_TALL, height: 62 },
+  // The tableau waymark stands beside the starting ley, so it carries the
+  // seam — a cyan spark on the horizon the first time you look north.
   {
     x: 92,
     y: 244,
-    sprite: MENHIR,
+    sprite: MENHIR_LEY,
     height: 42,
     lod: [{ minH: 11, sprite: SARSEN_TALL }],
   },
@@ -538,26 +541,38 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
     }
     // Fallen timber and small bright fungi break the wood into authored
     // clearings like the reference, rather than an even wall of tree cards.
+    // The hash also picks which deadfall, so the wood is not one repeated log.
     const dh = hash(cx ^ 0x63d1, cy ^ 0x4ac7);
     if (dh < 330) {
       out.push({
         x: baseX + ((dh * 3) % CHUNK),
         y: baseY + ((dh * 7) % CHUNK),
-        sprite: dh < 190 ? FALLEN_LOG : MUSHROOM_PATCH,
+        sprite: dh < 190 ? FALLEN_LOGS[dh % FALLEN_LOGS.length] : MUSHROOM_PATCH,
         height: dh < 190 ? 14 : 10,
       });
     }
   }
-  // Boulders and lone stones, sparse everywhere.
+  // Boulders and lone stones, sparse everywhere. Scattered stones keep their
+  // own art at every range now that it is solid mass — the old swap to
+  // SARSEN_TALL rescued a hollow sprite by morphing a squat stone into a
+  // tall one as you approached. Menhirs within sight of the ley carry the
+  // live seam instead of runes: waymarks answering the line they stand by.
   const bh = hash(cx ^ 0x9e37, cy ^ 0x79b9);
   if (bh < 180) {
     const kind = bh % 3;
+    const sx = baseX + (bh % CHUNK);
     out.push({
-      x: baseX + (bh % CHUNK),
+      x: sx,
       y: baseY + ((bh >> 2) % CHUNK),
-      sprite: kind === 0 ? SARSEN_FALLEN : kind === 1 ? STONE_LEANING : MENHIR,
+      sprite:
+        kind === 0
+          ? SARSEN_FALLEN
+          : kind === 1
+            ? STONE_LEANING
+            : Math.abs(sx) < 120
+              ? MENHIR_LEY
+              : MENHIR,
       height: 8 + (bh % 5) * 2,
-      lod: kind === 0 ? undefined : [{ minH: 9, sprite: SARSEN_TALL }],
     });
   }
 
