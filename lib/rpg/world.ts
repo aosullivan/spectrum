@@ -22,7 +22,8 @@ import {
   TREE_PINE_LIVE,
   TRILITHON,
 } from "@/lib/rpg/flora";
-import { B, BB, BC, BG, C, G, K, W } from "@/lib/rpg/palette";
+import { LOOK } from "@/lib/rpg/look";
+import { B, BB, BC, BG, C, E, G, K, RAMP_G0, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 import {
@@ -62,9 +63,29 @@ export const HENGE_POS = { x: 760, y: 760 };
 // ------------------------------------------------------------------ terrain
 
 /**
- * Ground colour at a world point, or K for bare dark earth.
- * The look: black dominates; green line-work and tufts; the cyan leyline
- * runs north along x=0 from spawn to the keep gate.
+ * What bare ground is made of, per look: void black (classic), the flat
+ * earth tone (dusk), or — under the ULAplus ramps — a mottled value ramp,
+ * heather-dark to moss-lit, with a lit verge where the leyline's light
+ * spills onto the soil beside it.
+ */
+export function bareGround(wx: number, wy: number): number {
+  if (!LOOK.ramps) return LOOK.earth ? E : K;
+  const ix = Math.floor(wx);
+  const iy = Math.floor(wy);
+  // Broad moisture clumps set the value; sparse lit blades sit proud.
+  const m = hash(ix >> 2, iy >> 2);
+  let step = m < 240 ? 2 : m < 700 ? 1 : 0;
+  if (hash(ix, iy ^ 0xabc) < 28) step = 3;
+  const ax = Math.abs(wx);
+  if (wy < KEEP_POS.y && ax < 30) step += ax < 14 ? 2 : 1;
+  return RAMP_G0 + Math.min(3, step);
+}
+
+/**
+ * Ground colour at a world point; bare ground is the region's earth tone
+ * (or void black in the classic look — see look.ts). Green line-work and
+ * tufts over it; the cyan leyline runs north along x=0 from spawn to the
+ * keep gate.
  *
  * `footprint` is how many world units one screen pixel spans at this depth —
  * distant samples widen thin features (the leyline must reach the horizon)
@@ -110,12 +131,15 @@ export function groundColour(
   }
 
   // --- the leyline: bright core, dithered fringe, shining to the horizon ---
+  // The fringe's dark half is bare ground, not paint, so it follows the
+  // look — left black it reads as a burnt strip beside the light.
+  const bare = bareGround(wx, wy);
   const ax = Math.abs(wx);
   if (wy < KEEP_POS.y) {
     const core = Math.max(1.6, footprint * 0.7);
     if (ax < core) return footprint > 3 || (iy & 7) < 3 ? BC : C;
-    if (ax < core + 3.4) return (ix + iy) % 2 === 0 ? C : K;
-    if (ax < core + 6.4) return hash(ix, iy) < 140 ? C : K;
+    if (ax < core + 3.4) return (ix + iy) % 2 === 0 ? C : bare;
+    if (ax < core + 6.4) return hash(ix, iy) < 140 ? C : bare;
   }
 
   // --- moss patches: elliptical dithered blobs on a coarse lattice ---
@@ -141,7 +165,7 @@ export function groundColour(
   // a few dashes on it. The old forest is exempt: it is dying.
   if (!woods) {
     const bed = hash(ix >> 1, iy >> 1);
-    const cover = greenwood ? 150 : 90;
+    const cover = (greenwood ? 150 : 90) * LOOK.cover;
     if (bed < cover && (ix + iy) % 2 === 0) {
       return bed < cover / 7 ? BG : G;
     }
@@ -174,7 +198,8 @@ export function groundColour(
   // --- faint world-anchored contour dashes tie the ground together ---
   if ((iy & 31) === 0 && (ix & 7) < 3 && hash(ix >> 3, iy) < 500) return G;
 
-  return K;
+  // Bare ground: void black, or the region's earth tone when the look asks.
+  return bare;
 }
 
 // ------------------------------------------------------------------ features

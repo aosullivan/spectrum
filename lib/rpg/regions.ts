@@ -36,7 +36,10 @@ function ramp(v: number, lo: number, hi: number): number {
 }
 
 function newTable(): [number, number, number][] {
-  return Array.from({ length: 16 }, () => [0, 0, 0] as [number, number, number]);
+  return Array.from(
+    { length: ULA_STANDARD.length },
+    () => [0, 0, 0] as [number, number, number],
+  );
 }
 
 // Blending runs every frame, so the two working tables are reused rather than
@@ -53,7 +56,7 @@ function mix(
 ): PaletteTable {
   if (t <= 0) return a;
   if (t >= 1) return b;
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < a.length; i++) {
     for (let c = 0; c < 3; c++) {
       into[i][c] = Math.round(a[i][c] + (b[i][c] - a[i][c]) * t);
     }

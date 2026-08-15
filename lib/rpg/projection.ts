@@ -115,10 +115,12 @@ export function collectBillboards(
   t = 0,
   /** Per-column wall distance from the interior raycaster; null outdoors. */
   depth: Float32Array | null = null,
+  /** Ground elevation sampler when the relief look is on; null keeps flat. */
+  terrain: ((x: number, y: number) => number) | null = null,
 ): SpriteDraw[] {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
-  const eyeY = eyeHeight(cam);
+  const eyeY = eyeHeight(cam) + (terrain ? terrain(cam.x, cam.y) : 0);
   const drawn: {
     z: number;
     screenX: number;
@@ -169,9 +171,12 @@ export function collectBillboards(
     // Elevated props hang above the floor — a sconce on a wall, not a lamp
     // standing on the flags. `stands` lifts the whole prop to a storey, so
     // battlements on the roof sit at roof height rather than in the mud.
+    // Under the relief look everything also stands on its hillside.
     const baseY =
       groundRow(z, eyeY) -
-      (((it.elevate ?? 0) + (it.stands ?? 0)) * FOCAL) / z;
+      (((it.elevate ?? 0) + (it.stands ?? 0) + (terrain ? terrain(it.x, it.y) : 0)) *
+        FOCAL) /
+        z;
     drawn.push({
       z,
       screenX,

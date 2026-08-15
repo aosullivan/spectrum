@@ -12,7 +12,9 @@ import {
   textWidth,
 } from "@/lib/rpg/assets";
 import { KEEP_MID, KEEP_NEAR } from "@/lib/rpg/art";
-import { B, BC, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
+import { BAYER4, LOOK } from "@/lib/rpg/look";
+import { B, BC, BW, BY, C, E, G, K, RAMP_G0, RAMP_S0, W } from "@/lib/rpg/palette";
+import { terrainHeight } from "@/lib/rpg/terrain";
 import {
   REFERENCE_HERO_BACK,
   REFERENCE_HERO_STAFF,
@@ -38,6 +40,7 @@ import {
   KEEP_GATE_Y,
   KEEP_POS,
   VILLAGE_POS,
+  bareGround,
   featuresNear,
   groundColour,
 } from "@/lib/rpg/world";
@@ -64,6 +67,38 @@ const MOON_AZIMUTH = -0.72;
 function drawSky(s: Screen, yaw: number, dead: boolean): void {
   const scroll = Math.round(yaw * SKY_PX_PER_RAD);
   const skyline = dead ? W : G;
+  // Under the ULAplus ramps the night sky is a true gradient: zenith-dark
+  // falling to a horizon glow, ordered-dithered between ramp steps. Drawn
+  // first; stars, moon and trees stand in front of it.
+  if (LOOK.ramps) {
+    for (let y = 0; y < HORIZON; y++) {
+      const fs = 3 * Math.pow(y / (HORIZON - 1), 1.7);
+      const s0 = Math.min(3, Math.floor(fs));
+      const frac = fs - s0;
+      for (let x = 0; x < SCREEN_W; x++) {
+        const up = BAYER4[((y & 3) << 2) | (x & 3)] < frac * 16 ? 1 : 0;
+        s.px(x, y, RAMP_S0 + Math.min(3, s0 + up));
+      }
+    }
+  }
+  // A dithered glow rising from the horizon: the night has a floor, not a
+  // void. Drawn first so stars, moon and trees stand in front of it.
+  if (LOOK.skyGlow && !LOOK.ramps) {
+    // Quadratic ramp: barely-there at the top so the band has no visible
+    // edge, ~3/4 coverage where it meets the ground. Hash grain rather than
+    // the ordered mask — ordered rows read as weave, and light is not woven.
+    // Anchored to azimuth like the stars, so the grain wheels as you turn.
+    const glowH = 26;
+    const glowTop = HORIZON - glowH;
+    for (let y = glowTop; y < HORIZON; y++) {
+      const p = (y - glowTop + 1) / glowH;
+      const keep = Math.round(13 * p * p);
+      for (let x = 0; x < SCREEN_W; x++) {
+        const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
+        if (hash(wx, y) % 17 < keep) s.px(x, y, B);
+      }
+    }
+  }
   // Sparse cold stars, anchored to azimuth so they wheel as you turn.
   for (let y = 2; y < HORIZON - 3; y += 3) {
     for (let x = 0; x < SCREEN_W; x += 7) {
@@ -139,26 +174,143 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
     const z = (eyeY * FOCAL) / depth;
     // Distance dither: detail thins as the world recedes into the dark.
     const fade = z > 2200 ? 3 : z > 1200 ? 2 : z > 650 ? 1 : 0;
+    // The bayer alternative: a continuous coverage ramp, 16/16 up close
+    // falling to 1/16 at the horizon, through the ordered mask.
+    const keep16 =
+      z <= 650 ? 16 : Math.max(1, 16 - Math.round(((z - 650) / 2600) * 16));
     const footprint = z / FOCAL;
     const rowBase = sy * SCREEN_W;
     for (let sx = 0; sx < SCREEN_W; sx++) {
       const l = ((sx - 128) * z) / FOCAL;
       const wx = cx + sin * z + cos * l;
       const wy = cy + cos * z - sin * l;
-      const colour = groundColour(wx, wy, footprint, t);
+      let colour = groundColour(wx, wy, footprint, t);
       if (colour === K) continue;
       // Leyline light never fades with distance and skips the clash pass.
       if (colour === BC || colour === C) {
         ley.push(rowBase + sx, colour);
         continue;
       }
-      if (fade === 1 && (sx + sy) % 2 !== 0) continue;
-      if (fade === 2 && ((sx & 3) !== 0 || (sy & 1) !== 0)) continue;
-      if (fade === 3 && (colour === G || (sx & 7) !== 0)) continue;
+      // The earth base never thins: bare ground is a surface, not detail,
+      // and holes punched in it read as speckle rather than distance.
+      const isBase = colour === E || (colour >= RAMP_G0 && colour <= RAMP_G0 + 3);
+      if (!isBase) {
+        if (LOOK.fade === "bayer") {
+          if (keep16 < 16 && BAYER4[((sy & 3) << 2) | (sx & 3)] >= keep16) {
+            continue;
+          }
+        } else {
+          if (fade === 1 && (sx + sy) % 2 !== 0) continue;
+          if (fade === 2 && ((sx & 3) !== 0 || (sy & 1) !== 0)) continue;
+          if (fade === 3 && (colour === G || (sx & 7) !== 0)) continue;
+        }
+      } else if (colour !== E) {
+        // Ramp bases recede by stepping down the ramp, dithered at the
+        // band boundaries — darkness by value, not by punching holes.
+        colour = demoteRamp(colour, z, sx, sy, 0);
+      }
       s.fb[rowBase + sx] = colour;
     }
   }
   return ley;
+}
+
+/** Distance (and slope) shading for a ground-ramp colour at depth `z`. */
+function demoteRamp(
+  colour: number,
+  z: number,
+  sx: number,
+  sy: number,
+  shade: number,
+): number {
+  const fd = Math.min(2, Math.max(0, (z - 900) / 1200));
+  const d0 = Math.floor(fd);
+  const extra = BAYER4[((sy & 3) << 2) | (sx & 3)] < (fd - d0) * 16 ? 1 : 0;
+  const step = colour - RAMP_G0 + shade - d0 - extra;
+  return RAMP_G0 + Math.min(3, Math.max(0, step));
+}
+
+/**
+ * The relief ground: per-column voxel-space march over the heightfield.
+ * Near-to-far, each column fills upward from the last drawn row, so a near
+ * ridge naturally occludes the valley behind it and crests rise past the
+ * flat-world horizon into the sky. Returns leyline light for post-pass
+ * compositing, exactly like the flat renderer.
+ */
+function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
+  const ley: number[] = [];
+  const sin = Math.sin(cam.yaw);
+  const cos = Math.cos(cam.yaw);
+  const cx = cam.x - sin * CAM_BACK;
+  const cy = cam.y - cos * CAM_BACK;
+  const eyeAbs = eyeHeight(cam) + terrainHeight(cam.x, cam.y);
+  // Ridges occlude what stands behind them: every painted ground pixel
+  // records its depth, and blitScaled refuses to paint a farther sprite
+  // over a nearer hillside.
+  const gz = s.acquireGroundZ();
+  /** Ridges may climb this far into the sky before a column stops. */
+  const CAP = 14;
+  for (let sx = 0; sx < SCREEN_W; sx++) {
+    let bottom = HUD_TOP;
+    let prevRow = HUD_TOP + 8;
+    let prevWx = cx;
+    let prevWy = cy;
+    let prevH = eyeAbs - eyeHeight(cam);
+    let prevZ = 1;
+    for (let z = 12; z < 3800 && bottom > CAP; z += 2 + z * 0.02) {
+      const l = ((sx - 128) * z) / FOCAL;
+      const wx = cx + sin * z + cos * l;
+      const wy = cy + cos * z - sin * l;
+      const h = terrainHeight(wx, wy);
+      const row = HORIZON + ((eyeAbs - h) * FOCAL) / z;
+      if (row < bottom) {
+        // Slopes rising away present their face to the viewer and catch
+        // the moon; falling ground turns away into shadow.
+        const grade = (h - prevH) / Math.max(1, z - prevZ);
+        const shade = grade > 0.055 ? 1 : grade < -0.055 ? -1 : 0;
+        const keep16 =
+          z <= 650 ? 16 : Math.max(1, 16 - Math.round(((z - 650) / 2600) * 16));
+        const top = Math.max(Math.ceil(row), CAP);
+        for (let y = bottom - 1; y >= top; y--) {
+          const f = (y - row) / (prevRow - row);
+          const swx = wx + (prevWx - wx) * f;
+          const swy = wy + (prevWy - wy) * f;
+          let colour = groundColour(swx, swy, z / FOCAL, t);
+          const idx = y * SCREEN_W + sx;
+          if (colour === BC || colour === C) {
+            ley.push(idx, colour);
+            colour = bareGround(swx, swy);
+          }
+          const isBase = colour >= RAMP_G0 && colour <= RAMP_G0 + 3;
+          if (isBase) {
+            colour = demoteRamp(colour, z, sx, y, shade);
+          } else if (
+            colour !== K &&
+            BAYER4[((y & 3) << 2) | (sx & 3)] >= keep16
+          ) {
+            // Far detail dissolves into shaded soil, never into holes —
+            // on a hillside there is no void to fall back to. True black
+            // stays: it is only ever water here.
+            colour = demoteRamp(rampOf(bareGround(swx, swy)), z, sx, y, shade);
+          }
+          s.fb[idx] = colour;
+          gz[idx] = z;
+        }
+        bottom = top;
+      }
+      prevRow = row;
+      prevWx = wx;
+      prevWy = wy;
+      prevH = h;
+      prevZ = z;
+    }
+  }
+  return ley;
+}
+
+/** Coerce a bare-ground colour to a ramp entry (identity when ramps are on). */
+function rampOf(bare: number): number {
+  return bare >= RAMP_G0 && bare <= RAMP_G0 + 3 ? bare : RAMP_G0 + 1;
 }
 
 // --------------------------------------------------------------------- hero
@@ -471,7 +623,7 @@ export function renderFrame(
 ): void {
   s.clear();
   drawSky(s, cam.yaw, cam.x < DEAD_WOOD_X);
-  const ley = drawGround(s, cam, t);
+  const ley = LOOK.hills ? drawGroundRelief(s, cam, t) : drawGround(s, cam, t);
   if (platform) drawPlatform(s, cam, platform);
   s.attributePass(0, HUD_TOP);
   for (let i = 0; i < ley.length; i += 2) s.fb[ley[i]] = ley[i + 1];
@@ -498,7 +650,13 @@ export function renderFrame(
   const jobs = [
     ...(omit?.has("keep") || keepDistance > 800 ? [] : collectFaces(cam, KEEP_BOXES)),
     ...(villageDistance > 850 ? [] : collectFaces(cam, VILLAGE_BOXES)),
-    ...collectBillboards(cam, [...distantKeep, ...features, ...entities], t),
+    ...collectBillboards(
+      cam,
+      [...distantKeep, ...features, ...entities],
+      t,
+      null,
+      LOOK.hills ? terrainHeight : null,
+    ),
   ];
   jobs.sort((a, b) => b.z - a.z);
   for (const j of jobs) j.paint(s);

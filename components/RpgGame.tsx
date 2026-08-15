@@ -15,7 +15,9 @@ function fittingZoom(width: number, height: number): number {
 export function RpgGame() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [crt, setCrt] = useState(false);
+  // CRT glass is part of the adopted Relief look; C still toggles it off.
+  const [crt, setCrt] = useState(true);
+  const crtRef = useRef(true);
   const [zoom, setZoom] = useState(4);
 
   useEffect(() => {
@@ -53,7 +55,10 @@ export function RpgGame() {
 
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
       if (down && e.code === "KeyC") {
-        setCrt((v) => !v);
+        setCrt((v) => {
+          crtRef.current = !v;
+          return !v;
+        });
         return;
       }
       // Commands are edge-triggered: the game consumes them and key-repeat
@@ -109,6 +114,14 @@ export function RpgGame() {
       screen.present();
       displayCtx.imageSmoothingEnabled = false;
       displayCtx.drawImage(buffer, 0, 0, display.width, display.height);
+      // Phosphor bleed: the frame again, nudged one device pixel right at
+      // low alpha, so cell edges smear the way a shadow-mask smears them.
+      // The scanline overlay is CSS; this is the half the overlay can't do.
+      if (crtRef.current) {
+        displayCtx.globalAlpha = 0.3;
+        displayCtx.drawImage(buffer, 1, 0, display.width, display.height);
+        displayCtx.globalAlpha = 1;
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -138,8 +151,14 @@ export function RpgGame() {
               aria-hidden
               className="pointer-events-none absolute inset-0"
               style={{
-                background:
-                  "repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.22) 3px), radial-gradient(ellipse at center, rgba(0,0,0,0) 62%, rgba(0,0,0,0.35) 100%)",
+                // One darkened line per logical pixel row, whatever the zoom,
+                // so the scanlines belong to the picture rather than beat
+                // against it. At 1x there is no room for lines — glass only.
+                background: `${
+                  zoom >= 2
+                    ? `repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) ${zoom - 1}px, rgba(0,0,0,0.30) ${zoom}px), `
+                    : ""
+                }radial-gradient(ellipse at center, rgba(0,0,0,0) 62%, rgba(0,0,0,0.35) 100%)`,
               }}
             />
           )}
