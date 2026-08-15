@@ -30,6 +30,14 @@ export interface Look {
   ramps: boolean;
   /** Rolling value-noise relief; ridges occlude and stand against the sky. */
   hills: boolean;
+  /**
+   * The finer ULAplus rows: ground and sky ramps at twice the resolution,
+   * masonry shaded through a stone ladder instead of a white dither, and
+   * distance spent in value — a far billboard steps down its own ramp rather
+   * than being dithered into holes. Needs `ramps`, which is where the ground
+   * and sky ladders come from in the first place.
+   */
+  shades: boolean;
 }
 
 /** The look as first shipped: void-black moor and the 8x8 clash. */
@@ -39,6 +47,7 @@ const CLASSIC: Look = {
   attribute: "8x8",
   ramps: false,
   hills: false,
+  shades: false,
 };
 
 /** Earth-floored ground, horizon glow, 8x1 weave. */
@@ -48,12 +57,16 @@ const DUSK: Look = {
   attribute: "8x1",
   ramps: false,
   hills: false,
+  shades: false,
 };
 
 /** Dusk under ULAplus value ramps, standing on the rolling heightfield. */
 const RELIEF: Look = { ...DUSK, ramps: true, hills: true };
 
-export const LOOK: Look = { ...RELIEF };
+/** Relief with the ramps at full ULAplus depth. */
+const SHADED: Look = { ...RELIEF, shades: true };
+
+export const LOOK: Look = { ...SHADED };
 
 export function setLook(look: Partial<Look>): void {
   Object.assign(LOOK, look);
@@ -73,4 +86,5 @@ export const LOOK_PRESETS: Record<string, Look> = {
   dusk: { ...DUSK },
   ramps: { ...DUSK, ramps: true },
   relief: { ...RELIEF },
+  shaded: { ...SHADED },
 };
