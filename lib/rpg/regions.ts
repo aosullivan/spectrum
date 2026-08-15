@@ -10,7 +10,9 @@
 // world.ts imports colour indices from palette.ts, so the region mapping cannot
 // live in either of them without a cycle.
 
+import { LOOK } from "@/lib/rpg/look";
 import {
+  applyNightSky,
   EMBER_DUSK,
   MOONLIT,
   PAL_TELEVISION,
@@ -74,6 +76,9 @@ function mix(
  * a moon is the one place that should not look like the forest around it.
  */
 export function paletteAt(x: number, y: number): PaletteTable {
+  // The night key swaps sky-row values inside the base tables, so it has to
+  // land before any of them is read or blended from.
+  applyNightSky(LOOK.night !== "off");
   let out: PaletteTable = ULA_STANDARD;
   if (x < DEAD_WOOD_X + BAND_FADE) {
     out = mix(

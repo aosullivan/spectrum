@@ -147,10 +147,49 @@ const GROUND_RAMP_SHADED: Ramp = Array.from(
   { length: RAMP_G_N },
   (_, i) => RAMP_G0 + i,
 );
+// The night-key ladders (see look.ts), one per resolution. The day ladders
+// climb from soil into green ink, which is why the near field could go
+// neon; at night the mat ends in soil — "moonlit" is the authored soil
+// span alone (its adopted coarse form was the four anchors; under shades,
+// the same span sampled twice as finely), and "meadow" keeps one green
+// step so bright ink survives only at the tuft crests. Green marks growth,
+// never ground.
+const GROUND_RAMP_NIGHT_MEADOW: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 2,
+  RAMP_G0 + 4,
+  RAMP_G0 + 6,
+  G,
+];
+const GROUND_RAMP_NIGHT_MOONLIT: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 2,
+  RAMP_G0 + 4,
+  RAMP_G0 + 6,
+];
+/** The soil span of the shaded ladder: interleave(soil), rows 16..22. */
+const GROUND_RAMP_NIGHT_MOONLIT_SHADED: Ramp = Array.from(
+  { length: 7 },
+  (_, i) => RAMP_G0 + i,
+);
+/** Everything but the bright-green rung: soil, turf bridges, green. */
+const GROUND_RAMP_NIGHT_MEADOW_SHADED: Ramp = Array.from(
+  { length: RAMP_G_N - 1 },
+  (_, i) => RAMP_G0 + i,
+);
 
 /** The ground ramp the current look shades through. */
 export function groundRamp(): Ramp {
-  if (LOOK.ramps) return LOOK.shades ? GROUND_RAMP_SHADED : GROUND_RAMP_ULAPLUS;
+  if (LOOK.ramps) {
+    if (LOOK.shades) {
+      if (LOOK.night === "meadow") return GROUND_RAMP_NIGHT_MEADOW_SHADED;
+      if (LOOK.night === "moonlit") return GROUND_RAMP_NIGHT_MOONLIT_SHADED;
+      return GROUND_RAMP_SHADED;
+    }
+    if (LOOK.night === "meadow") return GROUND_RAMP_NIGHT_MEADOW;
+    if (LOOK.night === "moonlit") return GROUND_RAMP_NIGHT_MOONLIT;
+    return GROUND_RAMP_ULAPLUS;
+  }
   return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
 }
 

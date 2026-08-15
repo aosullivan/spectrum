@@ -229,6 +229,51 @@ export const TORCHLIT = table(
   "150d06", "221709", "31220e", "422f14", "0a0510", "180b28", "281444", "3c2060",
 );
 
+// --------------------------------------------------------------- night key
+//
+// The `night` look lifts the sky ramp from near-black to a just-visible
+// navy: night air instead of void. Each table pairs with four night
+// ANCHORS, zenith to horizon, in its own cast — cold navy on the moor,
+// softened in the greenwood, warmed toward violet in the ember west — and
+// the seven live rows are those anchors interleaved, exactly as table()
+// builds the day ramp. Swapping values under fixed indices is what a real
+// ULAplus palette reload did, so the fiction holds, and keeping it a
+// runtime swap keeps every older preset bit-for-bit when the dial is off.
+
+// TORCHLIT is absent on purpose: it paints interiors, and no interior ever
+// draws the sky.
+const NIGHT_SKY: ReadonlyArray<[PaletteTable, readonly Rgb[]]> = [
+  [ULA_STANDARD, ["0a1430", "132242", "1c3058", "24386a"].map(rgbOf)],
+  [PAL_TELEVISION, ["0c1428", "141f3a", "1c2c50", "263862"].map(rgbOf)],
+  [DEEP_CONTRAST, ["0a1226", "101c3a", "182a52", "22386a"].map(rgbOf)],
+  [JEWEL, ["0a1230", "121f44", "1a2d5e", "243c78"].map(rgbOf)],
+  [MOONLIT, ["0c1626", "14223c", "1c3054", "263e66"].map(rgbOf)],
+  [EMBER_DUSK, ["140b26", "22123c", "321c54", "46286c"].map(rgbOf)],
+];
+
+/** The tables' own sky rows, copied before any swap so off restores exactly. */
+const DAY_SKY: ReadonlyArray<PaletteTable> = NIGHT_SKY.map(([t]) =>
+  t.slice(RAMP_S0, RAMP_S0 + RAMP_S_N).map((c) => [...c] as const),
+);
+
+let nightApplied = false;
+
+/** Write the day or night sky rows into every table, in place. */
+export function applyNightSky(on: boolean): void {
+  if (on === nightApplied) return;
+  nightApplied = on;
+  NIGHT_SKY.forEach(([into, anchors], i) => {
+    const rows = on ? interleave(anchors) : DAY_SKY[i];
+    for (let r = 0; r < RAMP_S_N; r++) {
+      const dst = into[RAMP_S0 + r] as unknown as [number, number, number];
+      dst[0] = rows[r][0];
+      dst[1] = rows[r][1];
+      dst[2] = rows[r][2];
+    }
+  });
+}
+
+
 /** Palette index -> [r, g, b]. The table in force when no region says otherwise. */
 export const PALETTE_RGB: PaletteTable = ULA_STANDARD;
 

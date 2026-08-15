@@ -106,6 +106,18 @@ const SOFTEN_REACH = 0.96;
  */
 const LEAF_AT = 3;
 
+/**
+ * Magnification past which it is thinned no longer. The gaps are a texture
+ * laid inside a shape, and they only work while the shape is still on screen
+ * with them. Past about five times life size the frame sits wholly inside the
+ * canopy's flat interior: the silhouette and the black gaps carved into the
+ * art are all outside the viewport, the stipple stops decorating anything and
+ * becomes the entire image, and a crown you should be standing under reads as
+ * a field of grit. The art's own carved holes are branch-sized by then and do
+ * the job the stipple was doing at four.
+ */
+const LEAF_UNTIL = 5;
+
 /** Fraction of the dither matrix that becomes gaps in a thinned canopy. */
 const LEAF_GAP = 0.24;
 
@@ -150,6 +162,13 @@ export class Screen {
    * changing it repaints everything already drawn and nothing has to be redrawn.
    */
   palette: PaletteTable = PALETTE_RGB;
+  /**
+   * Topmost ground row per column — where land meets sky. The flat renderer
+   * leaves it at HORIZON (clear() resets it); the relief march records each
+   * column's crest, so horizon dressing (the skyline ring) can stand on the
+   * hills instead of being swallowed by them.
+   */
+  readonly horizonRow = new Int16Array(SCREEN_W);
   private readonly ctx: CanvasRenderingContext2D;
   private readonly image: ImageData;
   /** Scratch histogram for the minifying blit; reused to stay allocation-free. */
@@ -173,6 +192,7 @@ export class Screen {
   clear(colour = K): void {
     this.fb.fill(colour);
     this.groundZ = null;
+    this.horizonRow.fill(HORIZON);
   }
 
   px(x: number, y: number, colour: number): void {
@@ -247,7 +267,11 @@ export class Screen {
     // ratio each destination pixel takes a vote of the block it covers, and
     // thin work thickens into a silhouette instead of dissolving into speckle.
     const shrunk = spr.w > w * 1.3 && spr.h > h * 1.3;
-    const thin = soften && spr.canopy === true && w >= spr.w * LEAF_AT;
+    const thin =
+      soften &&
+      spr.canopy === true &&
+      w >= spr.w * LEAF_AT &&
+      w < spr.w * LEAF_UNTIL;
     const stepX = spr.w / w;
     const stepY = spr.h / h;
     // Clipped to the screen rather than trusting `px` to drop what falls off
