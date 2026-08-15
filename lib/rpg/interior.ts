@@ -5,6 +5,7 @@
 // room as a reflection streak.
 
 import { NPC_SEER, NPC_SHADE } from "@/lib/rpg/bestiary";
+import { HEARTH, HEARTH_ALT, WOODPILE } from "@/lib/rpg/hermitage";
 import { EXIT_ARCH, ITEM_KEY, ITEM_TORC, TORC_FRAMES } from "@/lib/rpg/items";
 import { LOOK } from "@/lib/rpg/look";
 import {
@@ -22,6 +23,7 @@ import {
   dimmed,
   type PaletteTable,
 } from "@/lib/rpg/palette";
+import { BARREL, BED, TRESTLE } from "@/lib/rpg/village";
 import type { Actor } from "@/lib/rpg/interact";
 import {
   BANNER,
@@ -76,8 +78,13 @@ export interface Interior {
   readonly plan: readonly string[];
   /** Props standing in the room, in world units. */
   readonly props: readonly Billboard[];
-  /** Where a ley vein runs across the floor, in cell x. */
-  readonly leyCellX: number;
+  /**
+   * Where a ley vein runs across the floor, in cell x. Absent where none
+   * does: the keep was raised on the line and a cottage was not, and a
+   * village kitchen with a seam of ley light under the flags would be the
+   * single strangest thing in the world.
+   */
+  readonly leyCellX?: number;
   /**
    * A stair: as the mage walks from `baseY` to `topY` (world units) the
    * floor under her rises from 0 to `rise`. Continuous, so the climb is
@@ -90,6 +97,13 @@ export interface Interior {
    * into a fence.
    */
   readonly wallHeight?: number;
+  /**
+   * What the room is built of. The keep is coursed ashlar; a village house is
+   * studwork and plaster. Drawn in stone, a cottage parlour reads as the
+   * bottom of a well — the coursing gives the walls a masonry scale that
+   * fights the actual size of the room.
+   */
+  readonly material?: "stone" | "timber";
   /**
    * The table this room is painted in. Stepping through a doorway is the
    * one place the screen may snap to another palette: the light indoors is
@@ -286,6 +300,167 @@ export const TOWER_INTERIOR: Interior = {
   wallHeight: ROOF_HEIGHT + WALL_H,
 };
 
+// ------------------------------------------------------------- the village
+
+/**
+ * The inn's common room: five cells by six, the same 160x192 the timber
+ * outside encloses, running away from the door with the fire at the far end.
+ *
+ * There is no ley vein in any of these floors and no masonry either — a
+ * cottage is boards and plaster. What makes these rooms different from the
+ * keep is that they are LOW. The eye sits at 26 and the ceiling at the eave,
+ * so the beams are barely overhead, and that is the whole difference between
+ * a hall and a room somebody lives in.
+ */
+export const INN_INTERIOR: Interior = {
+  id: "inn",
+  plan: [
+    "##X##",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#####",
+  ],
+  // Trestle down the west side, barrels down the east, and a clear lane up
+  // the middle from the door to the fire. The radii matter as much as the
+  // positions: these rooms are a third the width of the keep's hall, so a
+  // light that reaches a hundred units floods the whole room to one flat
+  // yellow field, and a table with a thirteen-unit body across a
+  // ninety-six-unit floor leaves no way past it.
+  props: [
+    at(2, 4.2, HEARTH, 13, {
+      frames: [HEARTH, HEARTH_ALT],
+      fps: 5,
+      solid: 9,
+      light: 62,
+    }),
+    at(1.2, 2.6, TRESTLE, 15, { solid: 10 }),
+    at(3.15, 2, BARREL, 17, { solid: 7 }),
+    at(3.15, 2.9, BARREL, 17, { solid: 7 }),
+    at(1.15, 3.2, WALL_TORCH, 20, {
+      elevate: 30,
+      frames: TORCH_FRAMES,
+      light: 38,
+    }),
+    at(3.85, 3.2, WALL_TORCH, 20, {
+      elevate: 30,
+      frames: TORCH_FRAMES,
+      light: 38,
+    }),
+  ],
+  actors: [
+    {
+      ...at(2, 0.25, EXIT_ARCH, 44),
+      id: "inn-exit",
+      reach: 46,
+      label: "LEAVE THE INN",
+      interaction: { kind: "exit" },
+    },
+  ],
+  // Below the 72-unit eave outside: the inn has rooms over the common room,
+  // which is why it stands a storey taller than its neighbours.
+  wallHeight: 56,
+  material: "timber",
+};
+
+/**
+ * The east cottage — the villager's own, and lived in: a fire going, a bed
+ * made, a barrel by the wall.
+ */
+export const EAST_COTTAGE_INTERIOR: Interior = {
+  id: "east-cottage",
+  plan: [
+    "##X##",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#####",
+  ],
+  props: [
+    at(2, 3.2, HEARTH, 12, {
+      frames: [HEARTH, HEARTH_ALT],
+      fps: 5,
+      solid: 8,
+      light: 54,
+    }),
+    at(1.25, 1.6, BED, 9, { solid: 9 }),
+    at(3.1, 2.6, BARREL, 15, { solid: 7 }),
+    at(1.15, 2.5, WALL_TORCH, 18, {
+      elevate: 26,
+      frames: TORCH_FRAMES,
+      light: 32,
+    }),
+  ],
+  actors: [
+    {
+      ...at(2, 0.25, EXIT_ARCH, 38),
+      id: "east-cottage-exit",
+      reach: 44,
+      label: "GO BACK OUTSIDE",
+      interaction: { kind: "exit" },
+    },
+  ],
+  wallHeight: 44,
+  material: "timber",
+};
+
+/**
+ * The west cottage — the sister's, and she has gone to the grove. Same room,
+ * no fire in it. Nothing here is lit, so the walls carry the whole picture in
+ * line-work, and the difference between this and next door is the point: one
+ * of them has someone in it.
+ */
+export const WEST_COTTAGE_INTERIOR: Interior = {
+  id: "west-cottage",
+  plan: [
+    "##X##",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#####",
+  ],
+  props: [
+    at(2, 3.2, HEARTH, 12, { solid: 8 }),
+    at(1.25, 1.6, BED, 9, { solid: 9 }),
+    at(3.05, 2.6, WOODPILE, 13, { solid: 7 }),
+  ],
+  actors: [
+    {
+      ...at(2, 0.25, EXIT_ARCH, 38),
+      id: "west-cottage-exit",
+      reach: 44,
+      label: "GO BACK OUTSIDE",
+      interaction: { kind: "exit" },
+    },
+  ],
+  wallHeight: 44,
+  material: "timber",
+};
+
+/**
+ * Every interior, by the site id a doorway or a stair names. Entering used to
+ * be hard-wired — the one `enter` interaction in the game ignored its own
+ * `site` field and went to the tower regardless — so adding a second building
+ * you could walk into meant this table had to exist.
+ */
+export const SITES: Readonly<Record<string, Interior>> = {
+  keep: KEEP_INTERIOR,
+  tower: TOWER_INTERIOR,
+  inn: INN_INTERIOR,
+  "east-cottage": EAST_COTTAGE_INTERIOR,
+  "west-cottage": WEST_COTTAGE_INTERIOR,
+};
+
+/** What the panel and the map call the room she is standing in. */
+export const SITE_NAMES: Readonly<Record<string, string>> = {
+  keep: "THE KEEP",
+  tower: "THE TOWER STAIR",
+  inn: "THE INN",
+  "east-cottage": "EAST COTTAGE",
+  "west-cottage": "WEST COTTAGE",
+};
+
 export function cellAt(interior: Interior, cx: number, cy: number): string {
   if (cy < 0 || cy >= interior.plan.length) return "#";
   const row = interior.plan[cy];
@@ -439,13 +614,22 @@ function firesOf(interior: Interior): Fire[] {
  * black floor read as a diagram of a floor rather than a floor.
  */
 function floorColour(interior: Interior, wx: number, wy: number): number {
-  const veinX = (interior.leyCellX + 0.5) * CELL;
-  const d = Math.abs(wx - veinX);
-  // The core is broken along its length rather than solid: crossed at a
-  // glancing angle a solid vein turns the whole near floor into one cyan
-  // slab, which reads as a painted stripe instead of light under stone.
-  if (d < 1.6) return Math.floor(wy) % 5 === 0 ? C : BC;
-  if (d < 6 && (Math.floor(wx) + Math.floor(wy)) % 2 === 0) return C;
+  if (interior.leyCellX !== undefined) {
+    const veinX = (interior.leyCellX + 0.5) * CELL;
+    const d = Math.abs(wx - veinX);
+    // The core is broken along its length rather than solid: crossed at a
+    // glancing angle a solid vein turns the whole near floor into one cyan
+    // slab, which reads as a painted stripe instead of light under stone.
+    if (d < 1.6) return Math.floor(wy) % 5 === 0 ? C : BC;
+    if (d < 6 && (Math.floor(wx) + Math.floor(wy)) % 2 === 0) return C;
+  }
+  // Boards, not flags. A cottage floor is laid in planks running the length
+  // of the room, so its joints run one way at a plank's pitch — squared off
+  // into cell-sized slabs of blue ashlar a parlour gets the keep's floor,
+  // which is the most expensive thing in the building.
+  if (interior.material === "timber") {
+    return ((wx % 11) + 11) % 11 < 1.1 ? W : K;
+  }
   const jx = ((wx % CELL) + CELL) % CELL;
   const jy = ((wy % CELL) + CELL) % CELL;
   if (jx < 1.4 || jy < 1.4) return B;
@@ -469,6 +653,7 @@ function floorColour(interior: Interior, wx: number, wy: number): number {
 function drawCeiling(s: Screen, interior: Interior, cam: CameraState): void {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
+  const timber = interior.material === "timber";
   const above = (interior.wallHeight ?? WALL_H) - eyeHeight(cam);
   if (above <= 2) return;
   for (let sy = 1; sy < HORIZON; sy++) {
@@ -483,10 +668,23 @@ function drawCeiling(s: Screen, interior: Interior, cam: CameraState): void {
       const wy = ey + fy * dist - fx * lat;
       // Courses cross the room's short axis with black seams between, and
       // every bay a transverse rib runs denser than the field around it.
-      const course = ((wy % 16) + 16) % 16;
-      if (course < 1.7) continue;
+      //
+      // A cottage has no vault to course, so it gets the ribs alone — those
+      // are its joists. Same dark ink either way: the rule that bright
+      // line-work overhead pulls the eye off the floor holds in a parlour
+      // exactly as it does in a hall, which is what the old white beams got
+      // wrong in both.
       const rib = ((wy % CELL) + CELL) % CELL < 4.5;
-      const density = (rib ? 300 : 120) * fade;
+      if (timber) {
+        if (!rib) continue;
+      } else {
+        const course = ((wy % 16) + 16) % 16;
+        if (course < 1.7) continue;
+      }
+      // Joists take less ink than a vault rib: a cottage ceiling is barely
+      // above the eye, so it fills far more of the frame than the keep's
+      // does and the same density lays a solid mat across the top of it.
+      const density = (rib ? (timber ? 190 : 300) : 120) * fade;
       if (hash(Math.floor(wx / 2) + 17, Math.floor(wy / 2)) < density) {
         s.fb[sy * SCREEN_W + sx] = B;
       }
@@ -533,8 +731,11 @@ function drawFloor(s: Screen, interior: Interior, cam: CameraState): void {
         }
         // The slab faces carry a sparse blue grit near the eye — polished
         // stone catching what little light there is — and go black with
-        // distance by having that ink taken away.
+        // distance by having that ink taken away. Boards catch nothing:
+        // the grit is the polish, and it is the whole reason the keep's
+        // floor looks expensive.
         if (
+          interior.material !== "timber" &&
           dist < 430 &&
           hash(Math.floor(wx / 2.4) + 9, Math.floor(wy / 2.4)) <
             70 * (1 - dist / 430)
@@ -641,6 +842,13 @@ const COURSE = 24;
 /** Blocks lie longer than they are tall, or the face reads as a net. */
 const BLOCK = COURSE * 2;
 
+/**
+ * Spacing of the uprights in a studwork wall. Deliberately about the height
+ * of a person: it is the one thing on a blank wall that tells you how big the
+ * room is, and set at the masonry pitch a cottage measures out as a cellar.
+ */
+const STUD = 27;
+
 /** Past this a wall has lost all its ink and stands as darkness. */
 const WALL_INK_RANGE = 580;
 
@@ -682,6 +890,7 @@ function drawWalls(
 ): Float32Array {
   const hits = castColumns(interior, cam);
   const eyeY = eyeHeight(cam);
+  const timber = interior.material === "timber";
   const wallH = interior.wallHeight ?? WALL_H;
   // Per-column wall distance, handed to the billboard pass so stone can hide
   // what stands behind it. Infinity where the ray escaped the plan.
@@ -760,6 +969,9 @@ function drawWalls(
       // a hairline whether the stone is two paces off or twenty.
       const along = col.side === 0 ? col.hitY : col.hitX;
       const grain = col.z / FOCAL;
+      // Studs are set out along the wall only, so the whole test is a
+      // horizontal one and it can be lifted clear of the per-row loop.
+      const stud = ((along % STUD) + STUD) % STUD;
       // How much ink this distance is allowed to keep.
       const inkAt = Math.max(0, 1 - col.z / WALL_INK_RANGE);
       nearFires.length = 0;
@@ -782,6 +994,34 @@ function drawWalls(
         const h = eyeY - ((y - HORIZON) * col.z) / FOCAL;
         const below = eyeY - ((y + 1 - HORIZON) * col.z) / FOCAL;
         const band = Math.floor(h / COURSE);
+        // A studwork wall takes the same firelight and the same distance
+        // fade as an ashlar one, and nothing else: no courses, no bond, no
+        // block carving. Uprights at a fixed pitch, a sill along the floor
+        // and a plate under the ceiling, plaster between — and the pitch is
+        // the height of a person rather than of a quarried block, which is
+        // what keeps a parlour the size it really is instead of reading as
+        // the bottom of a well.
+        if (timber) {
+          let glow = 0;
+          for (const f of nearFires) {
+            const d = Math.sqrt(f.dd2 + (h - f.z) * (h - f.z));
+            const rr = f.r * 0.82;
+            if (d < rr) glow += (1 - d / rr) ** 1.7;
+          }
+          // Timber is pale here, not the keep's blue slate.
+          const ink = glow > GLOW_HOT ? BY : glow > GLOW_WARM ? Y : W;
+          const frame = stud < grain * 1.1 + 0.7 || h < 3 || h > wallH - 4;
+          // The plaster has to stay well under the frame, or the panels
+          // close over and the wall goes back to being one flat sheet.
+          const density = (frame ? 0.95 : 0.09 + glow * 0.55) * inkAt;
+          if (
+            density > 0.02 &&
+            hash(Math.floor(along / 2.6), Math.floor(h / 2.6)) < density * 1000
+          ) {
+            s.fb[i] = ink;
+          }
+          continue;
+        }
         // Horizontal mortar: the seam between courses is black absence.
         if (band !== Math.floor(below / COURSE)) continue;
         // Running bond: every other course starts half a block along.
@@ -1135,7 +1375,12 @@ export function renderInterior(
   }
   drawFloor(s, interior, cam);
   const depth = drawWalls(s, interior, cam, fires);
-  drawFloorSheen(s, interior, cam, depth, visibleActors);
+  // Only a polished floor mirrors what stands on it. Scrubbed boards do not,
+  // and the streaks are what make the keep's floor read as stone worth
+  // polishing — spent on a cottage they say the opposite of what is meant.
+  if (interior.material !== "timber") {
+    drawFloorSheen(s, interior, cam, depth, visibleActors);
+  }
   s.attributePass(0, HUD_TOP);
   drawKeepStairs(s, interior, cam, depth);
   drawSanctumBeam(s, interior, cam, depth, t);

@@ -58,11 +58,16 @@ import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 import {
   VILLAGE_BOXES,
+  VILLAGE_DOORWAYS,
   VILLAGE_POS,
   VILLAGE_PROPS,
+  VILLAGE_YARD,
+  inVillageClearing,
+  type Doorway,
 } from "@/lib/rpg/village";
 
 export { VILLAGE_POS } from "@/lib/rpg/village";
+export type { Doorway } from "@/lib/rpg/village";
 export { HERMITAGE_BOXES, HERMITAGE_POS } from "@/lib/rpg/hermitage";
 
 // ------------------------------------------------------------------- places
@@ -357,12 +362,17 @@ export function groundColour(
   }
   // --- village lane and yard: a swept yard, not moorland ---
   // Bare earth with a cobble stipple, and no mat over it — the village reads
-  // as trodden ground precisely because the shading stops at its edge.
-  const vx = wx - VILLAGE_POS.x;
-  const vy = wy - VILLAGE_POS.y;
-  const villageSquare = Math.abs(vx) < 82 && Math.abs(vy) < 138;
-  const southLane = Math.abs(vx) < 17 && vy > -250 && vy < -100;
-  if (villageSquare || southLane) {
+  // as trodden ground precisely because the shading stops at its edge. That
+  // edge is frayed against a coarse hash rather than drawn true: a clean
+  // ellipse of bare earth reads as a plot someone pegged out, and the yard
+  // has to stop short of the treeline anyway, or the ring of grass between
+  // the two goes with it.
+  const yx = (wx - VILLAGE_YARD.x) / VILLAGE_YARD.rx;
+  const yy = (wy - VILLAGE_YARD.y) / VILLAGE_YARD.ry;
+  const yard = Math.sqrt(yx * yx + yy * yy);
+  const southLane =
+    Math.abs(wx - VILLAGE_POS.x) < 17 && wy > 846 && wy < VILLAGE_YARD.y;
+  if (yard < 1 - (hash(ix >> 3, iy >> 3) % 80) / 1000 || southLane) {
     const cobble = hash(ix >> 1, iy >> 1);
     if (cobble < 95 && (ix + iy) % 3 === 0) return W;
     if ((iy & 15) === 0 && (ix & 7) < 3) return W;
@@ -582,7 +592,7 @@ export const KEEP_BOXES: readonly Box[] = [
   // pass beneath and is therefore absent from ground collision.
   { x: KEEP_POS.x - 44, y: KEEP_GATE_Y - 9, w: 32, d: 46, base: 0, top: 98, detail: "gate" },
   { x: KEEP_POS.x + 44, y: KEEP_GATE_Y - 9, w: 32, d: 46, base: 0, top: 98, detail: "gate" },
-  { x: KEEP_POS.x, y: KEEP_GATE_Y - 8, w: 52, d: 3, base: 0, top: 70, detail: "door" },
+  { x: KEEP_POS.x, y: KEEP_GATE_Y - 8, w: 52, d: 3, base: 0, top: 70, detail: "opening" },
   { x: KEEP_POS.x, y: KEEP_GATE_Y - 9, w: 120, d: 46, base: 74, top: 98, detail: "gate" },
   // Crenellations use the same wall runs, so the silhouette follows the
   // collision footprint rather than an unrelated facade.
@@ -652,6 +662,37 @@ function crenellateY(
 const PLACED: Feature[] = [
   ...VILLAGE_PROPS,
   ...HERMITAGE_PROPS,
+
+  // The village's own trees, composed rather than rolled for. The clearing
+  // above takes the wood out wholesale, and a bald ellipse in the greenwood
+  // looks as wrong as the thicket did — so a few go back, chosen for where
+  // they stand: one great oak on the green beside the well, which is the
+  // tree a village is built around; two behind the cottages, which put
+  // canopy on the skyline without standing between you and a door; and a
+  // pair either side of the lane's mouth, so the approach is a way in
+  // through trees rather than an opening in a hedge. Nothing stands on the
+  // square itself or in front of a frontage.
+  ...(
+    [
+      { x: 372, y: 1032, sprite: TREE_OAK, height: 96 },
+      { x: 686, y: 1220, sprite: TREE_OAK, height: 78 },
+      { x: 202, y: 1266, sprite: TREE_BIRCH, height: 66 },
+      { x: 300, y: 1310, sprite: TREE_OAK, height: 72 },
+      { x: 352, y: 966, sprite: TREE_BIRCH, height: 62 },
+      { x: 512, y: 966, sprite: TREE_OAK, height: 70 },
+      { x: 664, y: 1002, sprite: TREE_BIRCH, height: 58 },
+    ] as const
+  ).map((t) => ({ ...t })),
+  // Scrub along the verge, where the swept ground gives out.
+  ...(
+    [
+      { x: 322, y: 1332, h: 13 },
+      { x: 556, y: 1330, h: 12 },
+      { x: 198, y: 1148, h: 11 },
+      { x: 674, y: 1136, h: 12 },
+      { x: 386, y: 982, h: 10 },
+    ] as const
+  ).map((b) => ({ x: b.x, y: b.y, sprite: BUSH, height: b.h })),
   // Opening tableau: pale sarsens establish the near, middle, and far planes
   // visible in the reference frame while remaining ordinary world objects.
   { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
@@ -757,16 +798,21 @@ const PLACED: Feature[] = [
       solid: 30,
     };
   }),
-  ...[0, 1, 2, 3, 4, 5].map((i) => {
-    const a = (i / 6) * Math.PI * 2;
-    return {
-      x: HENGE_POS.x + Math.sin(a) * 250,
-      y: HENGE_POS.y + Math.cos(a) * 250,
-      sprite: i % 3 === 0 ? SARSEN_FALLEN : SARSEN_TALL,
-      height: i % 3 === 0 ? 26 : 84,
-      solid: i % 3 === 0 ? 26 : 14,
-    };
-  }),
+  // One of the six lands inside the village, so it is dropped: the ring is
+  // outliers fallen around the henge, and an outlier fewer on the far side is
+  // not something anyone can count.
+  ...[0, 1, 2, 3, 4, 5]
+    .map((i) => {
+      const a = (i / 6) * Math.PI * 2;
+      return {
+        x: HENGE_POS.x + Math.sin(a) * 250,
+        y: HENGE_POS.y + Math.cos(a) * 250,
+        sprite: i % 3 === 0 ? SARSEN_FALLEN : SARSEN_TALL,
+        height: i % 3 === 0 ? 26 : 84,
+        solid: i % 3 === 0 ? 26 : 14,
+      };
+    })
+    .filter((s) => !inVillageClearing(s.x, s.y)),
 
   // The grove, composed rather than distributed. The old ring — eight
   // near-identical trees at one radius — read as a municipal hedge. Now the
@@ -947,6 +993,13 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   // dead wood is dense enough to swallow a stone circle whole.
   const clear = out.filter((f) => {
     if (Math.abs(f.x) < 14 && f.y < KEEP_POS.y) return false;
+    // The village needs this more than any of them. It stands east of
+    // GREENWOOD_EDGE_X, where the chunk roll is at its densest — four
+    // attempts a chunk at better than even odds — and it was the one named
+    // place with no clearing at all, so the wood grew through the houses,
+    // stood in the doorways and closed over the lane. Trees inside the
+    // village are authored below, not rolled for.
+    if (inVillageClearing(f.x, f.y)) return false;
     if (Math.hypot(f.x - GROVE_POS.x, f.y - GROVE_POS.y) < GROVE_R) return false;
     if (Math.hypot(f.x - HENGE_POS.x, f.y - HENGE_POS.y) < HENGE_R) return false;
     if (Math.hypot(f.x - CIRCLE_POS.x, f.y - CIRCLE_POS.y) < CIRCLE_R) return false;
@@ -962,15 +1015,56 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
 }
 
 /**
- * Glide into the warded door and cross directly into the roofed hall.
- * `trigger` is shallow so the transition happens at the timber threshold.
+ * Every door in the world, keep gate and cottage alike.
+ *
+ * The keep's threshold used to be a bespoke box test bolted to the side of
+ * the update loop, which is why it was the only building you could walk into.
+ * One list, one rule: come within `noticeAt` and the leaves swing; come within
+ * `enterAt` with them clear and you are through.
+ *
+ * The gate takes two leaves rather than one — a fifty-unit slab swinging off a
+ * single hinge is a barn door — and they open outward like every other door
+ * here. Inward was the first instinct, and it made them invisible: swung back
+ * into an unlit gateway a black leaf against a black opening says nothing at
+ * all. Outward they come round against the moonlit ground in full view, and
+ * because each leaf stays on its own side of the arch neither one sweeps the
+ * line you walk up.
  */
-export const GATE = {
-  halfW: 28,
-  y: KEEP_GATE_Y + 10,
-  trigger: 18,
-  doorstepY: KEEP_GATE_Y - 34,
-} as const;
+export const DOORWAYS: readonly Doorway[] = [
+  {
+    id: "keep-gate",
+    site: "keep",
+    x: KEEP_POS.x,
+    y: KEEP_GATE_Y + 28,
+    halfW: 28,
+    noticeAt: 96,
+    enterAt: 36,
+    doorstepY: KEEP_GATE_Y - 34,
+    leaves: [
+      {
+        hx: KEEP_POS.x - 26,
+        hy: KEEP_GATE_Y - 8,
+        shut: Math.PI / 2,
+        swing: 1.62,
+        width: 26,
+        base: 0,
+        top: 70,
+        detail: "door",
+      },
+      {
+        hx: KEEP_POS.x + 26,
+        hy: KEEP_GATE_Y - 8,
+        shut: -Math.PI / 2,
+        swing: -1.62,
+        width: 26,
+        base: 0,
+        top: 70,
+        detail: "door",
+      },
+    ],
+  },
+  ...VILLAGE_DOORWAYS,
+];
 
 /**
  * Solid footprints the hero cannot glide through. The keep is a wall, not a
@@ -982,7 +1076,10 @@ const WORLD_COLLIDERS = [
   ...HERMITAGE_BOXES,
 ].filter(
   (box) =>
-    box.base === 0 && box.detail !== "door" && box.detail !== "timberDoor",
+    box.base === 0 &&
+    box.detail !== "door" &&
+    box.detail !== "timberDoor" &&
+    box.detail !== "opening",
 );
 const OUTDOOR_BODY_R = 10;
 

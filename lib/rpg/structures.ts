@@ -12,7 +12,7 @@
 
 import { rampColour, type Ramp } from "@/lib/rpg/dither";
 import { LOOK } from "@/lib/rpg/look";
-import { BC, BW, K, RAMP_K0, W } from "@/lib/rpg/palette";
+import { BC, BW, BY, K, RAMP_K0, W } from "@/lib/rpg/palette";
 import {
   CAM_HEIGHT,
   FOCAL,
@@ -35,7 +35,38 @@ export interface Box {
   base: number;
   top: number;
   /** Optional world-anchored surface treatment. */
-  detail?: "wall" | "tower" | "gate" | "door" | "timber" | "timberDoor" | "roof";
+  detail?:
+    | "wall"
+    | "tower"
+    | "gate"
+    | "door"
+    | "timber"
+    | "timberDoor"
+    | "opening"
+    | "roof";
+}
+
+/**
+ * A door leaf, hinged on one vertical edge and swinging about it.
+ *
+ * Boxes are axis-aligned, so a door that opens cannot be one: halfway through
+ * its swing the leaf lies at an angle to both world axes. It is drawn instead
+ * as a single quad — the same projection, the same flat fill, the same plank
+ * detail as the slab it replaces — with only its free edge moving.
+ */
+export interface DoorLeaf {
+  /** The hinge post, in world units. */
+  hx: number;
+  hy: number;
+  /** Bearing from hinge to free edge with the door shut, in radians. */
+  shut: number;
+  /** How far the leaf swings when open. The sign picks which way. */
+  swing: number;
+  width: number;
+  base: number;
+  top: number;
+  /** Joinery drawn on the leaf: a warded keep gate, or a hut's planks. */
+  detail?: "door" | "timberDoor";
 }
 
 /** Nothing nearer than this is projected; it would be behind the eye. */
@@ -218,19 +249,27 @@ function paintFaceDetail(
     if (from && to) drawLine(s, from.x, from.y, to.x, to.y, colour);
   };
 
+  // An opening is the hole itself: black, rimmed by the fill, and carrying no
+  // joinery at all. Everything the doorway says is said by the leaf in it.
+  if (box.detail === "opening") return;
+
   if (box.detail === "door" || box.detail === "timberDoor") {
     // Ignore the thin door's edge faces. Its broad face is a dark oak slab
     // picked out with pale planks and a cyan ward, not another stone panel.
     if (length < box.w * 0.75) return;
-    for (let d = 8; d < length; d += 9) {
-      stroke(d / length, box.base + 3, d / length, box.top - 3, W);
-    }
-    // Ledgers as a fraction of the door, not at fixed heights: the keep's
-    // gate is seventy units tall and a hut's is twenty, and a fixed offset
-    // draws the upper band off the top of the short one and onto the wall.
     const rise = box.top - box.base;
-    stroke(0.03, box.base + rise * 0.26, 0.97, box.base + rise * 0.26, BW);
-    stroke(0.03, box.base + rise * 0.69, 0.97, box.base + rise * 0.69, BW);
+    // Seams between boards, stopped short of the head and the sill. Sparse:
+    // a plank every nine units with a bright ledger banded across the top
+    // third and the bottom third drew a grid of lit rectangles, and a grid of
+    // lit rectangles in a wall is a window, whatever it was meant to be.
+    for (let d = 10; d < length - 4; d += 11) {
+      stroke(d / length, box.base + 2, d / length, box.top - 5, W);
+    }
+    // One ledger, and in the ordinary white — the brace across a board door,
+    // not a glazing bar.
+    stroke(0.08, box.base + rise * 0.4, 0.92, box.base + rise * 0.4, W);
+    // The latch, on the swinging edge: the one detail that says door outright.
+    stroke(0.74, box.base + rise * 0.52, 0.9, box.base + rise * 0.52, BY);
     if (box.detail === "door") {
       stroke(0.5, box.base + 25, 0.38, box.base + 35, BC);
       stroke(0.38, box.base + 35, 0.5, box.base + 45, BC);
@@ -241,22 +280,35 @@ function paintFaceDetail(
   }
 
   if (box.detail === "timber") {
+    // Bays are counted off in WORLD units, not as fractions of the face. Set
+    // out by fraction — which is how this was drawn when the biggest house in
+    // the village was a hundred units across — a longer frontage gets wider
+    // bays rather than more of them, and a pair of storey-high cross braces
+    // stretches into a lattice. Blown up over a real building that read as
+    // greenhouse glazing.
     stroke(0.02, box.base + 7, 0.98, box.base + 7, BW);
     stroke(0.02, box.top - 7, 0.98, box.top - 7, BW);
-    for (const along of [0.22, 0.5, 0.78]) {
-      stroke(along, box.base + 5, along, box.top - 5, BW);
+    const bays = Math.max(2, Math.round(length / 40));
+    for (let i = 1; i < bays; i++) {
+      stroke(i / bays, box.base + 5, i / bays, box.top - 5, BW);
     }
-    stroke(0.03, box.base + 9, 0.49, box.top - 9, W);
-    stroke(0.49, box.top - 9, 0.97, box.base + 9, W);
-    stroke(0.03, box.top - 9, 0.49, box.base + 9, W);
-    stroke(0.49, box.base + 9, 0.97, box.top - 9, W);
+    // Braces stiffen the end bays, as they do on a real frame — corner to
+    // eave, and nowhere else. Two of them, however long the wall.
+    const bay = 1 / bays;
+    stroke(0.03, box.base + 9, bay * 0.9, box.top - 9, W);
+    stroke(0.97, box.base + 9, 1 - bay * 0.9, box.top - 9, W);
     return;
   }
 
   if (box.detail === "roof") {
-    for (let d = 7; d < length; d += 10) {
-      const along = d / length;
-      stroke(along, box.base + 1, along, box.top - 1, W);
+    // Thatch courses. Spaced by world length for the same reason, and only
+    // on the courses deep enough to show one — a stack of six shallow steps
+    // each ruled with its own battens is a fishing net, not a roof.
+    if (box.top - box.base > 5) {
+      for (let d = 9; d < length - 4; d += 15) {
+        const along = d / length;
+        stroke(along, box.base + 1, along, box.top - 1, W);
+      }
     }
     stroke(0.01, box.base + 2, 0.99, box.base + 2, K);
     stroke(0.01, box.top - 2, 0.99, box.top - 2, BW);
@@ -293,6 +345,82 @@ function paintFaceDetail(
       stroke(along, low + 1, along, high - 1, K);
     }
   }
+}
+
+/** Details that are holes or joinery rather than masonry: filled black. */
+const DARK_FACE: ReadonlySet<string> = new Set(["door", "timberDoor", "opening"]);
+
+/**
+ * How much ink a plaster panel takes against a stone or thatched one.
+ *
+ * A timbered wall is a DARK field with bright framing laid on it. Filled at
+ * masonry density the panels came out a near-even stipple of white, the studs
+ * and braces vanished into it, and a cottage read as a pane of frosted glass
+ * in a frame — which is roughly what happens to any large area of half-tone
+ * on this hardware.
+ */
+const PANEL_TONE = 0.38;
+
+/**
+ * Project a hinged leaf at `open` (0 shut, 1 wide) as one paint job.
+ *
+ * Unlike a wall, a door is not backface-culled: it is a plank of timber a
+ * finger thick, and swung back on itself you are looking at its far side.
+ * Both sides are the same drawing, so there is nothing to choose between them.
+ */
+export function collectLeaf(
+  cam: CameraState,
+  leaf: DoorLeaf,
+  open: number,
+): FaceDraw | null {
+  const { fx, fy } = forward(cam.yaw);
+  const { ex, ey } = eyeOf(cam);
+  const toCam = (wx: number, wy: number, h: number): CamPoint => {
+    const dx = wx - ex;
+    const dy = wy - ey;
+    return { lat: dx * fy - dy * fx, z: dx * fx + dy * fy, h };
+  };
+
+  const angle = leaf.shut + leaf.swing * open;
+  const tipX = leaf.hx + Math.sin(angle) * leaf.width;
+  const tipY = leaf.hy + Math.cos(angle) * leaf.width;
+  const poly = clipNear([
+    toCam(leaf.hx, leaf.hy, leaf.top),
+    toCam(tipX, tipY, leaf.top),
+    toCam(tipX, tipY, leaf.base),
+    toCam(leaf.hx, leaf.hy, leaf.base),
+  ]);
+  if (poly.length < 3) return null;
+
+  let zsum = 0;
+  for (const p of poly) zsum += p.z;
+  const z = zsum / poly.length;
+  const screen = poly.map((p) => ({
+    x: 128 + (p.lat * FOCAL) / p.z,
+    y: heightRow(p.h, p.z),
+  }));
+  const asBox: Box = {
+    x: (leaf.hx + tipX) / 2,
+    y: (leaf.hy + tipY) / 2,
+    w: leaf.width,
+    d: 3,
+    base: leaf.base,
+    top: leaf.top,
+    detail: leaf.detail ?? "timberDoor",
+  };
+  const edge: [number, number][] = [
+    [leaf.hx, leaf.hy],
+    [tipX, tipY],
+  ];
+  return {
+    // Ties broken in front of the opening it hangs in, so a shut door is
+    // never half-eaten by the hole behind it.
+    z: z - 0.5,
+    paint: (s) => {
+      paintPolygon(s, screen, 0);
+      paintFaceDetail(s, asBox, edge, toCam, z);
+    },
+  };
 }
 
 /**
@@ -364,7 +492,11 @@ export function collectFaces(
           paintPolygon(
             s,
             screen,
-            b.detail === "door" || b.detail === "timberDoor" ? 0 : level,
+            DARK_FACE.has(b.detail ?? "")
+              ? 0
+              : b.detail === "timber"
+                ? level * PANEL_TONE
+                : level,
           );
           paintFaceDetail(s, b, f.pts, toCam, z);
         },
