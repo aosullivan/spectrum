@@ -29,7 +29,7 @@ import {
   type Billboard,
   type CameraState,
 } from "@/lib/rpg/projection";
-import { drawPanel, type Blip } from "@/lib/rpg/panel";
+import { drawPanel } from "@/lib/rpg/panel";
 import { collectFaces } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import {
@@ -318,18 +318,14 @@ export interface HudState {
   /** 0..1. */
   lifeforce: number;
   gems: [boolean, boolean, boolean];
-  /** Where she is, named. */
+  /** Where she is, named. Captions the area map. */
   place: string;
   /** What she is carrying. */
   carried: readonly string[];
-  /** Everything alive near enough for the radar. */
-  blips: readonly Blip[];
-  /** Set indoors: the radar draws this room plan instead of a compass. */
-  plan?: { rows: readonly string[]; cell: number };
 }
 
-/** The control panel lives in its own module; this passes it the camera. */
-function drawHud(s: Screen, hud: HudState, cam: CameraState): void {
+/** The control panel lives in its own module. */
+function drawHud(s: Screen, hud: HudState): void {
   drawPanel(s, {
     spellName: hud.spellName,
     runes: RUNES,
@@ -337,12 +333,6 @@ function drawHud(s: Screen, hud: HudState, cam: CameraState): void {
     lifeforce: hud.lifeforce,
     gems: hud.gems,
     carried: hud.carried,
-    place: hud.place,
-    x: cam.x,
-    y: cam.y,
-    yaw: cam.yaw,
-    blips: hud.blips,
-    plan: hud.plan,
   });
 }
 
@@ -415,12 +405,11 @@ export function drawOverlay(
   hud: HudState,
   t: number,
   overlay: OverlayState | undefined,
-  cam: CameraState,
 ): void {
   drawHero(s, t);
   if (overlay?.dialogue) drawDialogue(s, overlay.dialogue, t);
   else if (overlay?.prompt) drawPrompt(s, overlay.prompt);
-  drawHud(s, hud, cam);
+  drawHud(s, hud);
 }
 
 /**
@@ -510,5 +499,5 @@ export function renderFrame(
   jobs.sort((a, b) => b.z - a.z);
   for (const j of jobs) j.paint(s);
   if (lightning && t < lightning.until) drawLightning(s, cam, t, lightning);
-  drawOverlay(s, hud, t, overlay, cam);
+  drawOverlay(s, hud, t, overlay);
 }

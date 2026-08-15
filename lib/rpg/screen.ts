@@ -16,6 +16,13 @@ export interface Sprite {
   h: number;
   /** Palette indices, T for transparent, row-major. */
   data: Uint8Array;
+  /**
+   * Leaves rather than cloth or stone. Blown up close, a solid field of this
+   * art is punched through with sky (see `blitScaled`) — a canopy two paces
+   * away is gaps and light, and painting it as a slab is what made the near
+   * field the weakest thing on screen.
+   */
+  canopy?: boolean;
 }
 
 /** Parse string-art rows + char->palette legend into an indexed sprite. */
@@ -31,6 +38,11 @@ export function sprite(rows: string[], legend: Record<string, number>): Sprite {
     }
   }
   return { w, h, data };
+}
+
+/** The same, for art that is foliage: see `Sprite.canopy`. */
+export function foliage(rows: string[], legend: Record<string, number>): Sprite {
+  return { ...sprite(rows, legend), canopy: true };
 }
 
 /** Squared RGB distance between two palette entries. */
@@ -49,6 +61,57 @@ export function hash(x: number, y: number): number {
   h = (h ^ (h >>> 13)) | 0;
   h = (h * 1274126177) | 0;
   return ((h ^ (h >>> 16)) >>> 0) % 1000;
+}
+
+/**
+ * A 4x4 ordered dither expressed as an offset in source pixels. Used to break
+ * up the seams of a heavily magnified sprite (see `blitScaled`). The values
+ * are the Bayer sequence rescaled to +/- half a pixel.
+ */
+const JITTER = [
+  -0.47, 0.03, -0.34, 0.16, 0.28, -0.22, 0.41, -0.09, -0.28, 0.22, -0.41, 0.09,
+  0.47, -0.03, 0.34, -0.16,
+];
+
+/**
+ * Past this magnification a source pixel covers a visible tile of screen
+ * rather than a pixel of it, and nearest-neighbour reads as a grid of flat
+ * squares instead of as art.
+ */
+const SOFTEN_AT = 2.6;
+
+/**
+ * How far, in source pixels, a jittered sample may wander. Just under half a
+ * pixel: the stipple eats into both sides of a seam and never reaches past
+ * the neighbouring pixel, so fine detail survives while flat edges dissolve.
+ */
+const SOFTEN_REACH = 0.96;
+
+/**
+ * Magnification past which a canopy is thinned. Higher than SOFTEN_AT: at
+ * three times life size the art still carries its own texture, and it is only
+ * beyond that the solid runs in it turn into slabs.
+ */
+const LEAF_AT = 3;
+
+/** Fraction of the dither matrix that becomes gaps in a thinned canopy. */
+const LEAF_GAP = 0.24;
+
+/**
+ * True where `spr` runs on at (sx, sy) — the pixel has at least two of its
+ * four neighbours in its own colour, so it is part of a mass rather than a
+ * detail. Canopy art is a green/black dither, so demanding all four match
+ * finds almost nothing; two is what separates a leaf bank from a twig.
+ */
+function inFlatField(spr: Sprite, sx: number, sy: number): boolean {
+  if (sx < 1 || sy < 1 || sx >= spr.w - 1 || sy >= spr.h - 1) return false;
+  const c = spr.data[sy * spr.w + sx];
+  let same = 0;
+  if (spr.data[sy * spr.w + sx - 1] === c) same++;
+  if (spr.data[sy * spr.w + sx + 1] === c) same++;
+  if (spr.data[(sy - 1) * spr.w + sx] === c) same++;
+  if (spr.data[(sy + 1) * spr.w + sx] === c) same++;
+  return same >= 2;
 }
 
 export class Screen {
@@ -102,6 +165,11 @@ export class Screen {
    * `depth` is the per-column wall distance from the raycaster: any column
    * whose wall is nearer than `z` is skipped, so stone hides what is behind
    * it. Without it billboards paint straight over the walls.
+   *
+   * Past SOFTEN_AT the sample point is jittered by an ordered dither, so the
+   * seam between two source pixels becomes a stipple instead of a hard step.
+   * Without it a tree three paces away is a grid of flat squares with square
+   * holes in it: the art is 34 pixels wide and the screen wants 170.
    */
   blitScaled(
     spr: Sprite,
@@ -118,15 +186,43 @@ export class Screen {
     const h = Math.max(1, Math.round(dh));
     const x0 = Math.round(bx - w / 2);
     const y0 = Math.round(by - h);
-    for (let dy = 0; dy < h; dy++) {
-      const sy = Math.min(spr.h - 1, Math.floor((dy * spr.h) / h));
+    const soften = w >= spr.w * SOFTEN_AT && h >= spr.h * SOFTEN_AT;
+    const thin = soften && spr.canopy === true && w >= spr.w * LEAF_AT;
+    const stepX = spr.w / w;
+    const stepY = spr.h / h;
+    // Clipped to the screen rather than trusting `px` to drop what falls off
+    // it. A billboard at arm's length is a thousand pixels wide and mostly
+    // off-frame, and every one of those pixels now costs a dither.
+    const dyEnd = Math.min(h, SCREEN_H - y0);
+    const dxEnd = Math.min(w, SCREEN_W - x0);
+    for (let dy = Math.max(0, -y0); dy < dyEnd; dy++) {
       const py = y0 + dy;
-      for (let dx = 0; dx < w; dx++) {
+      const rowY = (dy + 0.5) * stepY;
+      const flat = Math.min(spr.h - 1, Math.floor(dy * stepY));
+      for (let dx = Math.max(0, -x0); dx < dxEnd; dx++) {
         const px = x0 + dx;
         if (depth && px >= 0 && px < SCREEN_W && depth[px] < z) continue;
         if (dither === 1 && ((px + py) & 1) !== 0) continue;
         if (dither === 2 && ((px & 1) !== 0 || (py & 1) !== 0)) continue;
-        const sx = Math.min(spr.w - 1, Math.floor((dx * spr.w) / w));
+        let sx: number;
+        let sy: number;
+        if (soften) {
+          // Two taps of the same matrix, read on transposed axes, so the
+          // horizontal and vertical wander do not agree and the seams break
+          // into a stipple rather than a staircase of diagonals.
+          const cell = (py & 3) * 4 + (px & 3);
+          const wander = JITTER[cell];
+          sx = Math.floor((dx + 0.5) * stepX + wander * SOFTEN_REACH);
+          sy = Math.floor(rowY + JITTER[(px & 3) * 4 + (py & 3)] * SOFTEN_REACH);
+          if (sx < 0) sx = 0;
+          else if (sx >= spr.w) sx = spr.w - 1;
+          if (sy < 0) sy = 0;
+          else if (sy >= spr.h) sy = spr.h - 1;
+          if (thin && wander > LEAF_GAP && inFlatField(spr, sx, sy)) continue;
+        } else {
+          sx = Math.min(spr.w - 1, Math.floor(dx * stepX));
+          sy = flat;
+        }
         const colour = spr.data[sy * spr.w + sx];
         if (colour !== T) this.px(px, py, tint ?? colour);
       }

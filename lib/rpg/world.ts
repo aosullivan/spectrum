@@ -70,7 +70,7 @@ const CIRCLE_R = 150;
 /** The sacred grove: still water, living ground, and the lady who rises. */
 export const GROVE_POS = { x: 500, y: 560 };
 const POOL_R = 62;
-const GROVE_R = 190;
+export const GROVE_R = 190;
 /**
  * The world splits into three bands. West of WOODS_EDGE_X the moor decays
  * into ancient dead woodland — bare gnarled limbs, nothing living. East of
