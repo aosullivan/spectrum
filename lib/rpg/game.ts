@@ -54,6 +54,7 @@ import {
   GATE,
   GROVE_POS,
   HENGE_POS,
+  HERMITAGE_POS,
   KEEP_POS,
   VILLAGE_POS,
   DEAD_WOOD_X,
@@ -289,7 +290,7 @@ export class Game {
     roam(DENIZENS, this.t);
   }
 
-  /** Keep the camera outside the wyrm's near plane and slide around its body. */
+  /** Keep the camera outside the wyrm while always allowing the player to escape. */
   private resolveWyrmMove(
     fromX: number,
     fromY: number,
@@ -298,15 +299,28 @@ export class Game {
   ): { x: number; y: number } {
     const wyrm = DENIZENS.find((d) => d.id === "wyrm");
     if (!wyrm) return { x: toX, y: toY };
-    const clear = (x: number, y: number) => {
-      const dx = x - wyrm.x;
-      const dy = y - wyrm.y;
-      return dx * dx + dy * dy >= 66 * 66;
+    const radius = 66;
+    const radialX = fromX - wyrm.x;
+    const radialY = fromY - wyrm.y;
+    const fromDistance = Math.hypot(radialX, radialY);
+    const moveX = toX - fromX;
+    const moveY = toY - fromY;
+    const toDistance = Math.hypot(toX - wyrm.x, toY - wyrm.y);
+
+    if (toDistance >= radius) return { x: toX, y: toY };
+
+    // A roaming wyrm can overlap the player between frames. In that case,
+    // retain outward and tangential movement instead of trapping the player.
+    if (fromDistance < 0.001) return { x: toX, y: toY };
+    const normalX = radialX / fromDistance;
+    const normalY = radialY / fromDistance;
+    const inward = moveX * normalX + moveY * normalY;
+    if (inward >= 0) return { x: toX, y: toY };
+
+    return {
+      x: fromX + moveX - inward * normalX,
+      y: fromY + moveY - inward * normalY,
     };
-    if (clear(toX, toY)) return { x: toX, y: toY };
-    if (clear(toX, fromY)) return { x: toX, y: fromY };
-    if (clear(fromX, toY)) return { x: fromX, y: toY };
-    return { x: fromX, y: fromY };
   }
 
   private scope(): string {
@@ -540,6 +554,7 @@ export class Game {
     if (near(HENGE_POS, 260)) return "THE HENGE";
     if (near(GROVE_POS, 210)) return "THE GROVE";
     if (near(CIRCLE_POS, 160)) return "STONE CIRCLE";
+    if (near(HERMITAGE_POS, 170)) return "THE HERMITAGE";
     if (this.cam.x < DEAD_WOOD_X) return "ANCIENT WOODS";
     return "THE MOOR";
   }

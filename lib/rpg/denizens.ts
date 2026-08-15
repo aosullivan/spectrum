@@ -16,7 +16,7 @@ import {
   REFERENCE_GOBLIN,
   REFERENCE_SKELETON,
 } from "@/lib/rpg/reference-art.generated";
-import { GROVE_POS, HENGE_POS } from "@/lib/rpg/world";
+import { GROVE_POS, HENGE_POS, HERMITAGE_POS } from "@/lib/rpg/world";
 import {
   VILLAGE_INNKEEPER,
   VILLAGE_POS,
@@ -40,8 +40,11 @@ function denizen(d: Omit<Denizen, "x" | "y">): Denizen {
   return { ...d, x: d.originX, y: d.originY };
 }
 
-/** The dragon holds its ground beside the leyline. */
-export const DRAGON_HOME = { x: 0, y: 210 };
+/**
+ * The dragon crosses the western moor in sight of the starting leyline, and
+ * south of the stone circle so its orbit never carries it into the stones.
+ */
+export const DRAGON_HOME = { x: -340, y: 280 };
 /** The elves keep to a grove east of the line. */
 const GROVE = { x: 380, y: 150 };
 
@@ -50,14 +53,13 @@ export const DENIZENS: Denizen[] = [
     id: "wyrm",
     originX: DRAGON_HOME.x,
     originY: DRAGON_HOME.y,
-    roamX: 0,
-    roamY: 0,
+    roamX: 150,
+    roamY: 90,
     rate: 0.11,
     phase: 0,
     hostile: false,
     sprite: REFERENCE_DRAGON,
-    height: 155,
-    maxScreenHeight: 132,
+    height: 118,
     reach: 96,
     label: "GREET THE WYRM",
     interaction: {
@@ -118,13 +120,14 @@ export const DENIZENS: Denizen[] = [
     },
   }),
 
-  // A hermit keeping his own company between the grove and the henge.
+  // A hermit keeping his own company in the ancient woods, pottering in the
+  // yard between his door, his hearth and his herb bed.
   denizen({
     id: "hermit",
-    originX: 640,
-    originY: 610,
-    roamX: 18,
-    roamY: 12,
+    originX: HERMITAGE_POS.x + 26,
+    originY: HERMITAGE_POS.y - 46,
+    roamX: 22,
+    roamY: 14,
     rate: 0.15,
     phase: 1.4,
     hostile: false,
@@ -249,8 +252,10 @@ export const DENIZENS: Denizen[] = [
     { id: "orc-2", x: 120, y: 1120, s: REFERENCE_BRUTE, h: 27, p: 3.1 },
     { id: "ghoul-1", x: 40, y: 760, s: REFERENCE_SKELETON, h: 23, p: 1.9 },
     { id: "ghoul-2", x: -240, y: 1180, s: REFERENCE_SKELETON, h: 22, p: 0.8 },
-    { id: "spider-1", x: -430, y: 560, s: SPIDER, h: 14, p: 2.2 },
-    { id: "spider-2", x: -520, y: 720, s: SPIDER, h: 15, p: 0.3 },
+    // Spiders hunt the dead wood between the stones and the hermitage —
+    // clear of both clearings, so neither place is walked into fighting.
+    { id: "spider-1", x: -590, y: 620, s: SPIDER, h: 14, p: 2.2 },
+    { id: "spider-2", x: -330, y: 760, s: SPIDER, h: 15, p: 0.3 },
     { id: "spider-3", x: 300, y: 940, s: SPIDER, h: 14, p: 1.1 },
   ] as const).map((m) =>
     denizen({

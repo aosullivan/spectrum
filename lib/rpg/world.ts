@@ -22,6 +22,12 @@ import {
   TREE_PINE_LIVE,
   TRILITHON,
 } from "@/lib/rpg/flora";
+import {
+  HERMITAGE_BOXES,
+  HERMITAGE_POS,
+  HERMITAGE_PROPS,
+  HERMITAGE_R,
+} from "@/lib/rpg/hermitage";
 import { B, BB, BC, BG, C, G, K, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
@@ -32,8 +38,24 @@ import {
 } from "@/lib/rpg/village";
 
 export { VILLAGE_POS } from "@/lib/rpg/village";
+export { HERMITAGE_BOXES, HERMITAGE_POS } from "@/lib/rpg/hermitage";
 
 // ------------------------------------------------------------------- places
+
+/**
+ * Places are laid out as a journey, not a cluster. The leyline is the spine:
+ * it runs due north from spawn to the keep, and the named places alternate
+ * east and west of it in bands, one destination per band. Nothing shares a
+ * band with anything else, so from any of them the next is a walk across
+ * open ground rather than a step sideways — and the ancient wood west of the
+ * line gets two of its own, or it is half the map with nothing in it.
+ *
+ *      y 1400   THE KEEP ......................... on the line
+ *      y 1100   .............. THE VILLAGE ....... east
+ *      y  900   THE HERMITAGE ..... THE HENGE .... west / far east
+ *      y  500   STONE CIRCLE ...... THE GROVE .... west / east
+ *      y   40   spawn ............................ on the line
+ */
 
 /** The keep the player can see from spawn and walk to. */
 export const KEEP_POS = { x: 0, y: 1400 };
@@ -42,9 +64,11 @@ export const KEEP_SIZE = { width: 288, depth: 320 } as const;
 /** The visible south threshold where the leyline enters the keep. */
 export const KEEP_GATE_Y = KEEP_POS.y - KEEP_SIZE.depth / 2;
 /** A stone circle off the leyline — landmark and future save shrine. */
-export const CIRCLE_POS = { x: 300, y: 520 };
+export const CIRCLE_POS = { x: -340, y: 520 };
+/** Trees stand off the stones, or the circle is invisible inside the wood. */
+const CIRCLE_R = 150;
 /** The sacred grove: still water, living ground, and the lady who rises. */
-export const GROVE_POS = { x: 470, y: 430 };
+export const GROVE_POS = { x: 500, y: 560 };
 const POOL_R = 62;
 export const GROVE_R = 190;
 /**
@@ -55,9 +79,11 @@ export const GROVE_R = 190;
  */
 export const DEAD_WOOD_X = -260;
 const WOODS_EDGE_X = DEAD_WOOD_X;
-export const GREENWOOD_EDGE_X = 260;
+export const GREENWOOD_X = 260;
+const GREENWOOD_EDGE_X = GREENWOOD_X;
 /** The henge stands deep in the greenwood. */
-export const HENGE_POS = { x: 760, y: 760 };
+export const HENGE_POS = { x: 840, y: 980 };
+const HENGE_R = 210;
 
 // ------------------------------------------------------------------ terrain
 
@@ -107,6 +133,18 @@ export function groundColour(
     const cobble = hash(ix >> 1, iy >> 1);
     if (cobble < 95 && (ix + iy) % 3 === 0) return W;
     if ((iy & 15) === 0 && (ix & 7) < 3) return W;
+  }
+
+  // --- the hermit's plot: the one bed of living green in the dead wood, and
+  // the reason there is anything on his drying rack ---
+  const hx = wx - (HERMITAGE_POS.x + 30);
+  const hy = wy - (HERMITAGE_POS.y - 76);
+  if (Math.abs(hx) < 46 && Math.abs(hy) < 30) {
+    // Sown in rows, so it reads as tended rather than as a patch of weed.
+    if (Math.abs(hy) > 26 || Math.abs(hx) > 42) return K;
+    if (iy % 7 < 3 && hash(ix, iy + 3131) < 620) {
+      return hash(ix, iy + 4242) < 90 ? BG : G;
+    }
   }
 
   // --- the leyline: bright core, dithered fringe, shining to the horizon ---
@@ -290,21 +328,70 @@ function crenellateY(
 /** The fixed, hand-placed world: the stone circle and the henge. */
 const PLACED: Feature[] = [
   ...VILLAGE_PROPS,
+  ...HERMITAGE_PROPS,
   // Opening tableau: pale sarsens establish the near, middle, and far planes
   // visible in the reference frame while remaining ordinary world objects.
   { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
   { x: -138, y: 236, sprite: SARSEN_TALL, height: 62 },
-  { x: 92, y: 244, sprite: MENHIR, height: 42 },
+  {
+    x: 92,
+    y: 244,
+    sprite: MENHIR,
+    height: 42,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
   { x: -236, y: 410, sprite: SARSEN_TALL, height: 70 },
   { x: 178, y: 390, sprite: SARSEN_TALL, height: 68 },
 
-  { x: CIRCLE_POS.x, y: CIRCLE_POS.y, sprite: DOLMEN, height: 26 },
-  { x: CIRCLE_POS.x - 34, y: CIRCLE_POS.y - 14, sprite: STONE_L, height: 18 },
-  { x: CIRCLE_POS.x + 30, y: CIRCLE_POS.y - 10, sprite: MENHIR, height: 16 },
-  { x: CIRCLE_POS.x - 20, y: CIRCLE_POS.y + 26, sprite: STONE_M, height: 14 },
-  { x: CIRCLE_POS.x + 22, y: CIRCLE_POS.y + 22, sprite: STONE_L, height: 17 },
-  { x: CIRCLE_POS.x + 2, y: CIRCLE_POS.y + 34, sprite: STONE_S, height: 10 },
-  { x: CIRCLE_POS.x - 48, y: CIRCLE_POS.y + 6, sprite: MENHIR, height: 15 },
+  {
+    x: CIRCLE_POS.x,
+    y: CIRCLE_POS.y,
+    sprite: DOLMEN,
+    height: 26,
+    lod: [{ minH: 14, sprite: TRILITHON }],
+  },
+  {
+    x: CIRCLE_POS.x - 34,
+    y: CIRCLE_POS.y - 14,
+    sprite: STONE_L,
+    height: 18,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x + 30,
+    y: CIRCLE_POS.y - 10,
+    sprite: MENHIR,
+    height: 16,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x - 20,
+    y: CIRCLE_POS.y + 26,
+    sprite: STONE_M,
+    height: 14,
+    lod: [{ minH: 10, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x + 22,
+    y: CIRCLE_POS.y + 22,
+    sprite: STONE_L,
+    height: 17,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x + 2,
+    y: CIRCLE_POS.y + 34,
+    sprite: STONE_S,
+    height: 10,
+    lod: [{ minH: 9, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x - 48,
+    y: CIRCLE_POS.y + 6,
+    sprite: MENHIR,
+    height: 15,
+    lod: [{ minH: 10, sprite: SARSEN_TALL }],
+  },
 
   // The henge: five trilithons in a ring, each far taller than the mage,
   // with outliers fallen around them.
@@ -409,16 +496,24 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
       y: baseY + ((bh >> 2) % CHUNK),
       sprite: kind === 0 ? SARSEN_FALLEN : kind === 1 ? STONE_LEANING : MENHIR,
       height: 8 + (bh % 5) * 2,
+      lod: kind === 0 ? undefined : [{ minH: 9, sprite: SARSEN_TALL }],
     });
   }
 
-  // Keep the leyline clear of clutter, and keep the sacred clearing and the
-  // henge ring genuinely open — scattered woodland inside them would stand
-  // between the player and the thing they came to see.
+  // Keep the leyline clear of clutter, and keep every named place genuinely
+  // open — scattered woodland inside them would stand between the player and
+  // the thing they came to see. The two western places need this most: the
+  // dead wood is dense enough to swallow a stone circle whole.
   const clear = out.filter((f) => {
     if (Math.abs(f.x) < 14 && f.y < KEEP_POS.y) return false;
     if (Math.hypot(f.x - GROVE_POS.x, f.y - GROVE_POS.y) < GROVE_R) return false;
-    if (Math.hypot(f.x - HENGE_POS.x, f.y - HENGE_POS.y) < 210) return false;
+    if (Math.hypot(f.x - HENGE_POS.x, f.y - HENGE_POS.y) < HENGE_R) return false;
+    if (Math.hypot(f.x - CIRCLE_POS.x, f.y - CIRCLE_POS.y) < CIRCLE_R) return false;
+    if (
+      Math.hypot(f.x - HERMITAGE_POS.x, f.y - HERMITAGE_POS.y) < HERMITAGE_R
+    ) {
+      return false;
+    }
     return true;
   });
   chunkCache.set(key, clear);
@@ -440,7 +535,11 @@ export const GATE = {
  * Solid footprints the hero cannot glide through. The keep is a wall, not a
  * poster: you pull up at its facade, with only the scripted door passable.
  */
-const WORLD_COLLIDERS = [...KEEP_BOXES, ...VILLAGE_BOXES].filter(
+const WORLD_COLLIDERS = [
+  ...KEEP_BOXES,
+  ...VILLAGE_BOXES,
+  ...HERMITAGE_BOXES,
+].filter(
   (box) =>
     box.base === 0 && box.detail !== "door" && box.detail !== "timberDoor",
 );

@@ -18,93 +18,81 @@
 import { drawText, drawWindow, headingOf } from "@/lib/rpg/panel";
 import { textWidth } from "@/lib/rpg/assets";
 import { B, BC, BG, BM, BR, BW, BY, C, G, K, W, Y } from "@/lib/rpg/palette";
-import { SCREEN_H, SCREEN_W, hash, type Screen } from "@/lib/rpg/screen";
+import { SCREEN_H, SCREEN_W, type Screen } from "@/lib/rpg/screen";
 import {
   CIRCLE_POS,
+  GREENWOOD_X,
   GROVE_POS,
-  GROVE_R,
   HENGE_POS,
+  HERMITAGE_POS,
   KEEP_POS,
   DEAD_WOOD_X,
-  GREENWOOD_EDGE_X,
   VILLAGE_POS,
 } from "@/lib/rpg/world";
 
 /**
- * The charted region. It has to hold the whole walkable world with room to
- * spare: she spawns at y=40 and the keep's back wall stands at y=1560, so a
- * chart starting at y=150 declared the opening view of the game off the map.
- * The margins past the outermost place are deliberate — a chart whose edge
- * runs through a named region reads as a bug rather than as a frontier.
+ * The charted region. Beyond it the map has nothing to say — and it says so
+ * by stopping: the land is drawn only inside CHART, and the margins left
+ * over in VIEW are blank, holding the compass and the place names that
+ * overhang the edge. The south edge reaches past the spawn, so she is never
+ * off her own map.
  */
-const CHART = { x0: -900, x1: 1100, y0: -60, y1: 1620 };
+const CHART = { x0: -780, x1: 1000, y0: -60, y1: 1580 };
 
-/**
- * The band of screen the chart may use: under the title rule, and stopping
- * clear of the caption row. Everything below CAPTION_Y belongs to the legend.
- */
+/** Where the chart may be drawn. Wider than the land, for the labels. */
 const VIEW = { x: 14, y: 26, w: 228, h: 136 };
 
-/** One line under the chart: her coordinates, or how far off it she is. */
+/**
+ * One line under the chart, and the reason VIEW stops short of the legend.
+ * The off-chart notice used to be drawn two pixels below the chart, which put
+ * it straight through the legend; giving it a row of its own means no reading
+ * of the map can ever put two lines of text on top of each other.
+ */
 const CAPTION_Y = 164;
 
 /** The legend strip, and the rule above it. */
 const LEGEND_Y = SCREEN_H - 16;
 
-const CHART_W = CHART.x1 - CHART.x0;
-const CHART_H = CHART.y1 - CHART.y0;
-
-/** One scale for both axes: a chart you can learn cannot be stretched. */
-const SCALE = Math.min(VIEW.w / CHART_W, VIEW.h / CHART_H);
-
-const PLOT_W = Math.round(CHART_W * SCALE);
-const PLOT_H = Math.round(CHART_H * SCALE);
-
-/**
- * Where the charted land actually lands on screen. The world is taller than
- * it is wide and the screen is the other way round, so the chart sits in the
- * middle of VIEW with a margin either side — which is where the compass and
- * the longer place names live.
- */
-const PLOT = {
-  x: VIEW.x + ((VIEW.w - PLOT_W) >> 1),
-  y: VIEW.y + ((VIEW.h - PLOT_H) >> 1),
-  w: PLOT_W,
-  h: PLOT_H,
-};
+const SCALE = Math.min(
+  VIEW.w / (CHART.x1 - CHART.x0),
+  VIEW.h / (CHART.y1 - CHART.y0),
+);
 
 /** World point to chart pixel. North (+y) is up, so the y axis inverts. */
 function plot(wx: number, wy: number): { px: number; py: number } {
+  const cx = VIEW.x + VIEW.w / 2;
+  const cy = VIEW.y + VIEW.h / 2;
+  const mx = (CHART.x0 + CHART.x1) / 2;
+  const my = (CHART.y0 + CHART.y1) / 2;
   return {
-    px: PLOT.x + Math.round(((wx - CHART.x0) / CHART_W) * PLOT.w),
-    py: PLOT.y + Math.round(((CHART.y1 - wy) / CHART_H) * PLOT.h),
+    px: Math.round(cx + (wx - mx) * SCALE),
+    py: Math.round(cy - (wy - my) * SCALE),
   };
-}
-
-/** What the land is at a chart pixel — the inverse of `plot`. */
-function unplot(px: number, py: number): { wx: number; wy: number } {
-  return {
-    wx: CHART.x0 + ((px - PLOT.x) / PLOT.w) * CHART_W,
-    wy: CHART.y1 - ((py - PLOT.y) / PLOT.h) * CHART_H,
-  };
-}
-
-/** A treeline is not a ruled boundary: wobble the edge of the woods. */
-function fray(wy: number): number {
-  return Math.sin(wy * 0.011) * 46 + Math.sin(wy * 0.031) * 22;
 }
 
 /**
- * `side` pushes a label clear of its neighbours — the circle and the grove
- * sit close enough on the chart that both labels to the right collide.
+ * `side` turns a label back towards the middle of the chart at the two
+ * extremes — the henge is the easternmost place and the hermitage the
+ * westernmost, so each labels inward or its name runs off the paper.
  */
 const PLACES = [
-  { pos: KEEP_POS, name: "THE KEEP", side: 1, dy: 0 },
-  { pos: CIRCLE_POS, name: "STONE CIRCLE", side: -1, dy: 0 },
-  { pos: GROVE_POS, name: "THE GROVE", side: 1, dy: -6 },
-  { pos: HENGE_POS, name: "THE HENGE", side: 1, dy: 0 },
-  { pos: VILLAGE_POS, name: "THE VILLAGE", side: 1, dy: 0 },
+  { pos: KEEP_POS, name: "THE KEEP", side: 1, dy: 0, built: true },
+  { pos: VILLAGE_POS, name: "THE VILLAGE", side: 1, dy: 0, built: true },
+  // The hermitage and the henge sit on opposite edges at nearly the same
+  // latitude, and their names reach towards each other; drop one a row.
+  { pos: HENGE_POS, name: "THE HENGE", side: -1, dy: 0, built: false },
+  { pos: HERMITAGE_POS, name: "THE HERMITAGE", side: 1, dy: 5, built: true },
+  { pos: GROVE_POS, name: "THE GROVE", side: 1, dy: 0, built: false },
+  { pos: CIRCLE_POS, name: "STONE CIRCLE", side: -1, dy: 0, built: false },
 ];
+
+/** The chart's own rectangle on screen, centred in the wider VIEW. */
+const EDGE = {
+  x0: Math.round(VIEW.x + VIEW.w / 2 - ((CHART.x1 - CHART.x0) * SCALE) / 2),
+  x1: Math.round(VIEW.x + VIEW.w / 2 + ((CHART.x1 - CHART.x0) * SCALE) / 2),
+  y0: Math.round(VIEW.y + VIEW.h / 2 - ((CHART.y1 - CHART.y0) * SCALE) / 2),
+  y1: Math.round(VIEW.y + VIEW.h / 2 + ((CHART.y1 - CHART.y0) * SCALE) / 2),
+};
 
 /** What a mark on the map stands for. Places are drawn separately. */
 export type MarkKind = "foe" | "friend" | "item" | "way";
@@ -167,8 +155,9 @@ function drawPlaceMark(s: Screen, px: number, py: number, built: boolean): void 
 }
 
 /**
- * A creature or a loose item. Every mark is bedded on black first: a cyan
- * blip on the cyan leyline, or a green one in the grove, is no mark at all.
+ * A creature or a loose item. Every mark is bedded on black first, for the
+ * same reason the place names are: a cyan blip on the cyan leyline, or a
+ * green one in the grove, is no mark at all.
  */
 function drawMark(s: Screen, px: number, py: number, kind: MarkKind): void {
   s.rect(px - 2, py - 2, 5, 5, K);
@@ -214,9 +203,11 @@ const ROSE = { x: 31, y: 46, r: 9 };
 function drawCompass(s: Screen, yaw: number): void {
   for (let a = 0; a < 32; a++) {
     const t = (a / 32) * Math.PI * 2;
-    const px = ROSE.x + Math.round(Math.sin(t) * ROSE.r);
-    const py = ROSE.y - Math.round(Math.cos(t) * ROSE.r);
-    s.px(px, py, a % 8 === 0 ? W : B);
+    s.px(
+      ROSE.x + Math.round(Math.sin(t) * ROSE.r),
+      ROSE.y - Math.round(Math.cos(t) * ROSE.r),
+      a % 8 === 0 ? W : B,
+    );
   }
   drawText(s, "N", ROSE.x - 2, ROSE.y - ROSE.r - 7, 1, BY);
   drawText(s, "S", ROSE.x - 2, ROSE.y + ROSE.r + 3, 1, W);
@@ -236,82 +227,114 @@ function drawCompass(s: Screen, yaw: number): void {
 // -------------------------------------------------------------------- chart
 
 /**
- * The land itself. The grove is the only near-solid thing on the chart, so it
- * reads as the one lush place; the two woods share a density and differ in
- * brightness, because one is living and one is dying; the moor is bare but for
- * the odd tuft. Scatters are hashed rather than patterned — a modulo lattice
- * at this scale turns into diagonal stripes and reads as a drawing error.
+ * The land, in the three bands the terrain actually has: dead wood west, open
+ * moor down the middle carrying the leyline, living greenwood east. Charting
+ * only the western trees was what made the map look half empty — one solid
+ * block of texture on the left and bare paper everywhere else.
+ *
+ * Every pattern below is screen-anchored and tested on (px + py), so the scan
+ * has to start on an even pixel: from an odd corner the sum is odd everywhere
+ * and each dither silently draws nothing at all.
  */
 function drawLand(s: Screen): void {
-  for (let py = PLOT.y; py < PLOT.y + PLOT.h; py++) {
-    for (let px = PLOT.x; px < PLOT.x + PLOT.w; px++) {
-      const { wx, wy } = unplot(px, py);
-      if (Math.hypot(wx - GROVE_POS.x, wy - GROVE_POS.y) < GROVE_R) {
-        if (((px + py) & 1) === 0) s.px(px, py, BG);
-        else if (hash(px, py) < 420) s.px(px, py, G);
-      } else if (wx < DEAD_WOOD_X + fray(wy)) {
-        // Dead standing timber: bare upright ticks, never a bright pixel.
-        if (hash(px, py + 400) < 90) {
-          s.px(px, py, G);
-          s.px(px, py - 1, G);
+  const step = 2;
+  const cx = VIEW.x + VIEW.w / 2;
+  const cy = VIEW.y + VIEW.h / 2;
+  for (let py = EDGE.y0 + (EDGE.y0 & 1); py < EDGE.y1; py += step) {
+    for (let px = EDGE.x0 + (EDGE.x0 & 1); px < EDGE.x1; px += step) {
+      // Invert the plot to ask what is at this pixel.
+      const wx = (CHART.x0 + CHART.x1) / 2 + (px - cx) / SCALE;
+      const wy = (CHART.y0 + CHART.y1) / 2 - (py - cy) / SCALE;
+
+      // The sacred grove reads as canopy dense enough to be a place, not
+      // just more trees: it is the only solid green on the chart.
+      if (Math.hypot(wx - GROVE_POS.x, wy - GROVE_POS.y) < 190) {
+        if ((px + py) % 4 === 0) s.px(px, py, BG);
+        else if ((px + py) % 2 === 0) s.px(px, py, G);
+        continue;
+      }
+
+      // A treeline is not a ruled boundary; fray both of them.
+      const fray = Math.sin(wy * 0.011) * 46 + Math.sin(wy * 0.031) * 22;
+      const east = Math.sin(wy * 0.009) * 40 + Math.sin(wy * 0.027) * 26;
+
+      if (wx < DEAD_WOOD_X + fray) {
+        // Two glades hold the western places open. Without them the wood
+        // closes over the stones and the hut and they read as marks
+        // floating on texture rather than clearings you can walk into.
+        if (Math.hypot(wx - CIRCLE_POS.x, wy - CIRCLE_POS.y) < 150) continue;
+        if (Math.hypot(wx - HERMITAGE_POS.x, wy - HERMITAGE_POS.y) < 170) {
+          continue;
         }
-      } else if (wx > GREENWOOD_EDGE_X - fray(wy + 700)) {
-        const h = hash(px, py + 800);
-        if (h < 55) s.px(px, py, BG);
-        else if (h < 260) s.px(px, py, G);
-      } else if (hash(px, py + 1200) < 22) {
-        s.px(px, py, G);
+        // Dying, so: dim, sparse, and thinning as it meets the moor.
+        const deep = (DEAD_WOOD_X + fray - wx) / 170;
+        if ((px * 3 + py) % 6 === 0 && (deep > 1 || (px + py) % 4 === 0)) {
+          s.px(px, py, G);
+        }
+      } else if (wx > GREENWOOD_X + east) {
+        // Living, so: the same scatter at full strength, lit with bright
+        // growth. A regular lattice here fills in as a solid green slab and
+        // swallows the grove, which has to stay the densest thing charted.
+        if (Math.hypot(wx - HENGE_POS.x, wy - HENGE_POS.y) < 150) continue;
+        if ((px * 3 + py) % 6 === 0) s.px(px, py, G);
+        else if ((px * 5 + py) % 14 === 0) s.px(px, py, BG);
       }
     }
   }
 }
 
-/** The leyline, the road she travels: bright, running north to the keep. */
-function drawLeyline(s: Screen): void {
-  const step = 1 / SCALE;
-  for (let wy = CHART.y0; wy <= KEEP_POS.y; wy += step) {
-    const { px, py } = plot(0, wy);
-    s.px(px, py, BC);
-    if (Math.floor(wy / step) % 4 === 0) s.px(px + 1, py, C);
-  }
-}
-
 function drawChart(s: Screen, state: MapState): void {
   drawLand(s);
-  // A dashed edge, so where the survey stops is a stated fact rather than the
-  // place the drawing happened to run out.
-  for (let x = PLOT.x; x < PLOT.x + PLOT.w; x += 3) {
-    s.px(x, PLOT.y - 2, B);
-    s.px(x, PLOT.y + PLOT.h + 1, B);
-  }
-  for (let y = PLOT.y; y < PLOT.y + PLOT.h; y += 3) {
-    s.px(PLOT.x - 2, y, B);
-    s.px(PLOT.x + PLOT.w + 1, y, B);
-  }
-  drawLeyline(s);
 
-  // The one region the game names but never drew: the dying wood in the west.
-  // Cleared to black first, or a dim caption over a green scatter is unreadable.
-  const woods = plot(DEAD_WOOD_X - 320, 1180);
-  s.rect(woods.px - 18, woods.py - 2, 38, 19, K);
-  drawText(s, "ANCIENT", woods.px - 16, woods.py, 1, W);
-  drawText(s, "WOODS", woods.px - 12, woods.py + 8, 1, W);
+  // Corner ticks marking where the surveyed land stops. A full box would
+  // fight the window frame; the corners say "edge of the chart" quietly.
+  for (const [ex, ey, sx, sy] of [
+    [EDGE.x0, EDGE.y0, 1, 1],
+    [EDGE.x1, EDGE.y0, -1, 1],
+    [EDGE.x0, EDGE.y1, 1, -1],
+    [EDGE.x1, EDGE.y1, -1, -1],
+  ] as const) {
+    for (let i = 0; i < 7; i++) {
+      s.px(ex + sx * i, ey, B);
+      s.px(ex, ey + sy * i, B);
+    }
+  }
 
-  for (const p of PLACES) {
+  // The leyline, the road she travels: bright, running north to the keep.
+  for (let wy = CHART.y0; wy <= KEEP_POS.y; wy += 4) {
+    const { px, py } = plot(0, wy);
+    s.px(px, py, BC);
+    if (wy % 40 < 4) s.px(px + 1, py, C);
+  }
+
+  // Places, and their names. Labels may overhang the land into the margins,
+  // which is what the margins are for; they clamp to VIEW, not to the chart.
+  // Mark and name both sit on cleared paper — white line-work laid straight
+  // over the woodland dither is unreadable at this size — and every clearing
+  // is cut before anything is written into any of them, because interleaved
+  // one place's mark erases the middle of its neighbour's name.
+  const laid = PLACES.map((p) => {
     const { px, py } = plot(p.pos.x, p.pos.y);
-    drawPlaceMark(s, px, py, p.name === "THE KEEP" || p.name === "THE VILLAGE");
     const width = textWidth(p.name, 1);
-    // Labels may run out into the margins either side of the chart; that is
-    // what the margins are for.
-    const lx =
-      p.side > 0
-        ? Math.min(px + 6, VIEW.x + VIEW.w - width)
-        : Math.max(px - 6 - width, VIEW.x);
-    const ly = py + 4 + p.dy;
-    // Cleared to black first: a place name laid straight over the woodland
-    // scatter is the one thing on the chart you cannot afford to misread.
-    s.rect(lx - 1, ly - 1, width + 2, 7, K);
-    drawText(s, p.name, lx, ly, 1, BW);
+    return {
+      ...p,
+      px,
+      py,
+      width,
+      lx:
+        p.side > 0
+          ? Math.min(px + 6, VIEW.x + VIEW.w - width)
+          : Math.max(px - 6 - width, VIEW.x),
+      ly: py + 4 + p.dy,
+    };
+  });
+  for (const p of laid) {
+    s.rect(p.px - 5, p.py - 7, 11, 12, K);
+    s.rect(p.lx - 2, p.ly - 1, p.width + 4, 7, K);
+  }
+  for (const p of laid) {
+    drawPlaceMark(s, p.px, p.py, p.built);
+    drawText(s, p.name, p.lx, p.ly, 1, BW);
   }
 
   for (const mark of state.marks) {
@@ -327,6 +350,7 @@ function drawChart(s: Screen, state: MapState): void {
     drawMark(s, px, py, mark.kind);
   }
 
+  // Her position — an arrow if she is on the chart, a pinned marker if not.
   const { cam } = state;
   const off =
     cam.x < CHART.x0 || cam.x > CHART.x1 || cam.y < CHART.y0 || cam.y > CHART.y1;
@@ -351,18 +375,6 @@ function drawChart(s: Screen, state: MapState): void {
       G,
     );
   }
-}
-
-/**
- * The caption row under the chart. It exists so the off-chart notice has
- * somewhere to go: it used to be drawn two pixels below the chart, which put
- * it straight on top of the legend, and her pinned marker landed in the same
- * strip. Since she spawns off-chart no longer, it usually carries her
- * position instead.
- */
-function drawFacing(s: Screen, yaw: number): void {
-  const word = `FACING ${headingOf(yaw)}`;
-  drawText(s, word, VIEW.x + VIEW.w - textWidth(word, 1), CAPTION_Y, 1, BY);
 }
 
 // --------------------------------------------------------------------- plan
@@ -461,7 +473,15 @@ export function drawAreaMap(s: Screen, state: MapState): void {
   else drawChart(s, state);
 
   drawCompass(s, state.cam.yaw);
-  drawFacing(s, state.cam.yaw);
+  const facing = `FACING ${headingOf(state.cam.yaw)}`;
+  drawText(
+    s,
+    facing,
+    VIEW.x + VIEW.w - textWidth(facing, 1),
+    CAPTION_Y,
+    1,
+    BY,
+  );
 
   s.rect(12, LEGEND_Y - 4, SCREEN_W - 24, 1, B);
   legendItem(s, 14, "YOU", (x) => s.rect(x, LEGEND_Y + 1, 3, 3, BM));
