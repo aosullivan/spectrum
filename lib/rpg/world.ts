@@ -4,12 +4,15 @@
 // (authored biome data arrives with the first dungeon milestone).
 
 import {
+  BOULDER_MOSSY,
   MENHIR,
   MENHIR_LEY,
   STONE_LEANING,
+  TREE_BONE_FAR,
   TREE_DEAD_PINE,
   TREE_GNARLED_A,
   TREE_GNARLED_B,
+  TREE_GNARLED_C,
 } from "@/lib/rpg/art";
 import { DOLMEN, STONE_L, STONE_M, STONE_S } from "@/lib/rpg/assets";
 import {
@@ -22,7 +25,6 @@ import {
   SARSEN_TALL,
   TREE_BIRCH,
   TREE_OAK,
-  TREE_PINE_LIVE,
   TREE_WILLOW,
   TRILITHON,
 } from "@/lib/rpg/flora";
@@ -340,9 +342,10 @@ export function groundColour(
   // --- biome: dying woodland west, living greenwood east, moor between ---
   const dead = 1 - band(wx, DEAD_WOOD_X - 130, DEAD_WOOD_X + 130);
   const greenwood = band(wx, GREENWOOD_EDGE_X - 130, GREENWOOD_EDGE_X + 130);
-  // The greenwood lift stays small on purpose: much past this the field never
-  // dips back below the ramp's black step and the wood goes solid green.
-  level += greenwood * 0.12 - dead * 0.5;
+  // The eastern wood keeps only a whisper of extra green: the concept's
+  // forest floor is black-dominant, moss pooling between the trees rather
+  // than a sward closing over — the bone trees need dark ground to stand on.
+  level += greenwood * 0.05 - dead * 0.5;
 
   // --- the living ground ringing the sacred pool ---
   // A gentle lift only: the old 0.34 closed the mat into wall-to-wall mint
@@ -381,7 +384,7 @@ export function groundColour(
   // smoothly to read as 8-bit. Widen the jumps and that stops being true.
   if (footprint < 3) {
     const tuft = hash(ix, iy);
-    if (tuft < (70 + greenwood * 25) * (1 - grove * 0.8)) level += 0.22;
+    if (tuft < (70 + greenwood * 10) * (1 - grove * 0.8)) level += 0.22;
     else if (tuft > 972 && grove < 0.3) level -= 0.4;
   }
 
@@ -519,6 +522,29 @@ const PLACED: Feature[] = [
   // visible in the reference frame while remaining ordinary world objects.
   { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
   { x: -138, y: 236, sprite: SARSEN_TALL, height: 62 },
+  // And bone trees leaning in over the first steps of the ley, so the very
+  // first frame is seen through the wood the way the concept frame is.
+  {
+    x: -88,
+    y: 118,
+    sprite: TREE_BONE_FAR,
+    lod: [{ minH: 20, sprite: TREE_GNARLED_A }],
+    height: 62,
+  },
+  {
+    x: 102,
+    y: 148,
+    sprite: TREE_BONE_FAR,
+    lod: [{ minH: 16, sprite: TREE_GNARLED_C }],
+    height: 52,
+  },
+  {
+    x: 174,
+    y: 264,
+    sprite: TREE_BONE_FAR,
+    lod: [{ minH: 20, sprite: TREE_GNARLED_A }],
+    height: 60,
+  },
   // The tableau waymark stands beside the starting ley, so it carries the
   // seam — a cyan spark on the horizon the first time you look north.
   {
@@ -665,32 +691,42 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   const baseY = cy * CHUNK;
   const woods = baseX < WOODS_EDGE_X;
   const greenwood = baseX > GREENWOOD_EDGE_X;
-  // A stand per wooded chunk, the odd lone tree out on the open moor.
-  const treeRolls = greenwood ? 4 : woods ? 4 : 1;
+  // The whole wood is bone trees now, per the concept frame: dense stands in
+  // both wooded bands, a thinner scatter flanking the open moor so the ley
+  // is always seen through trees. Only the grove keeps anything in leaf.
+  // The tall silhouettes serve a hand-drawn far glyph until the projection
+  // can afford the real art — shrunk past half size, two-pixel limbs lose
+  // the block vote and a wood of elms becomes a wood of dashes.
+  const treeRolls = greenwood || woods ? 5 : 2;
   for (let i = 0; i < treeRolls; i++) {
     const h = hash(cx * 5 + i, cy * 7 + i * 3);
-    if (h < (greenwood ? 520 : woods ? 620 : 90)) {
-      const kind = h % 5;
-      const living = greenwood
-        ? kind < 2
-          ? TREE_OAK
-          : kind < 4
-            ? TREE_BIRCH
-            : TREE_PINE_LIVE
-        : kind < 2
-          ? TREE_GNARLED_A
-          : kind < 4
-            ? TREE_GNARLED_B
-            : TREE_DEAD_PINE;
+    if (h < (greenwood ? 600 : woods ? 640 : 260)) {
+      const kind = h % 8;
+      const inWood = greenwood || woods;
+      const tree =
+        kind < 3
+          ? {
+              sprite: TREE_BONE_FAR,
+              lod: [{ minH: 20, sprite: TREE_GNARLED_A }],
+              height: (inWood ? 44 : 36) + (h % 5) * 8,
+            }
+          : kind < 5
+            ? {
+                sprite: TREE_BONE_FAR,
+                lod: [{ minH: 16, sprite: TREE_GNARLED_C }],
+                height: (inWood ? 32 : 28) + (h % 4) * 7,
+              }
+            : kind < 7
+              ? { sprite: TREE_GNARLED_B, height: 14 + (h % 3) * 6 }
+              : { sprite: TREE_DEAD_PINE, height: 28 + (h % 4) * 6 };
       out.push({
         x: baseX + (h % CHUNK),
         y: baseY + ((h >> 3) % CHUNK),
-        sprite: living,
-        height: (greenwood ? 56 : 34) + (h % 5) * 6,
+        ...tree,
       });
     }
   }
-  // Bracken and scrub, only where things still grow.
+  // Scrub in the eastern wood — low living bracken under the dead canopy.
   if (greenwood) {
     for (let i = 0; i < 2; i++) {
       const sh = hash((cx ^ 0x51ed) + i * 31, cy ^ 0x2f9a);
@@ -703,9 +739,11 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
         });
       }
     }
-    // Fallen timber and small bright fungi break the wood into authored
-    // clearings like the reference, rather than an even wall of tree cards.
-    // The hash also picks which deadfall, so the wood is not one repeated log.
+  }
+  // Fallen timber and small bright fungi break both woods into authored
+  // clearings, rather than an even wall of tree cards. The hash also picks
+  // which deadfall, so the wood is not one repeated log.
+  if (greenwood || woods) {
     const dh = hash(cx ^ 0x63d1, cy ^ 0x4ac7);
     if (dh < 330) {
       out.push({
@@ -716,27 +754,29 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
       });
     }
   }
-  // Boulders and lone stones, sparse everywhere. Scattered stones keep their
-  // own art at every range now that it is solid mass — the old swap to
-  // SARSEN_TALL rescued a hollow sprite by morphing a squat stone into a
-  // tall one as you approached. Menhirs within sight of the ley carry the
-  // live seam instead of runes: waymarks answering the line they stand by.
+  // Standing stones and mossy boulders, everywhere and no longer shy: the
+  // concept scatters real monoliths through the trees, near player height,
+  // not ankle stones. Menhirs within sight of the ley carry the live seam
+  // instead of runes: waymarks answering the line they stand by.
   const bh = hash(cx ^ 0x9e37, cy ^ 0x79b9);
-  if (bh < 180) {
-    const kind = bh % 3;
+  if (bh < 240) {
+    const kind = bh % 4;
     const sx = baseX + (bh % CHUNK);
+    const stone =
+      kind === 0
+        ? { sprite: SARSEN_FALLEN, height: 10 + (bh % 4) * 3 }
+        : kind === 1
+          ? { sprite: STONE_LEANING, height: 9 + (bh % 4) * 3 }
+          : kind === 2
+            ? { sprite: BOULDER_MOSSY, height: 7 + (bh % 3) * 2 }
+            : {
+                sprite: Math.abs(sx) < 120 ? MENHIR_LEY : MENHIR,
+                height: 16 + (bh % 5) * 4,
+              };
     out.push({
       x: sx,
       y: baseY + ((bh >> 2) % CHUNK),
-      sprite:
-        kind === 0
-          ? SARSEN_FALLEN
-          : kind === 1
-            ? STONE_LEANING
-            : Math.abs(sx) < 120
-              ? MENHIR_LEY
-              : MENHIR,
-      height: 8 + (bh % 5) * 2,
+      ...stone,
     });
   }
 

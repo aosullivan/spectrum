@@ -61,33 +61,37 @@ export const DRAGON = sprite(
 );
 
 /**
- * A barrow-ghoul, walking bones — skull, ribs and not much else, picked
- * out in white line-work because bone is the one thing in the moor that
- * is genuinely pale.
- * (12x18)
+ * A barrow-ghoul, walking bones. Built as bone MASS with black carved out —
+ * two sockets in a solid skull, rib slits cut into the chest rather than
+ * stripes across it, a black waist, one arm hanging clear and one raised to
+ * a claw. The old one drew ribs as full-width bands and read as a mummy
+ * from ninety units out; and the raised claw echoes the reference skeleton
+ * it hands off to up close, so the LOD swap stops changing the creature.
+ * (15x19)
  */
 export const GHOUL = sprite(
   [
-    "....HHHH....",
-    "...HwwwwH...",
-    "...HkwwkH...",
-    "...HwwwwH...",
-    "....HwwH....",
-    "....wHHw....",
-    "..w.HHHH.w..",
-    ".ww.HwwH.ww.",
-    ".w..HHHH..w.",
-    ".w..HwwH..w.",
-    "....HHHH....",
-    "....wHHw....",
-    "...HH..HH...",
-    "...w....w...",
-    "...H....H...",
-    "...w....w...",
-    "..HH....HH..",
-    ".HH......HH.",
+    ".....WWWWW.....",
+    "....Wwwwwww....",
+    "....wkwwkww...W",
+    ".....wwwww.w.w.",
+    "......wkw...ww.",
+    ".......w....ww.",
+    "....Wwwwwwww...",
+    ".Ww.wkkwwww....",
+    ".ww.wwwwkkw....",
+    ".ww.wkkwwww....",
+    ".ww..wwwww.....",
+    ".ww....w.......",
+    ".ww.wwwwwww....",
+    "w.w.www.www....",
+    "....ww...ww....",
+    "....wk...kw....",
+    "....ww...ww....",
+    "....ww...ww....",
+    "...Www...wwW...",
   ],
-  { w: W, H: BW, k: K },
+  { w: W, W: BW, k: K },
 );
 
 /**
