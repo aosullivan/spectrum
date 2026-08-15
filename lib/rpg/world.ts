@@ -46,7 +46,7 @@ export const CIRCLE_POS = { x: 300, y: 520 };
 /** The sacred grove: still water, living ground, and the lady who rises. */
 export const GROVE_POS = { x: 470, y: 430 };
 const POOL_R = 62;
-const GROVE_R = 190;
+export const GROVE_R = 190;
 /**
  * The world splits into three bands. West of WOODS_EDGE_X the moor decays
  * into ancient dead woodland — bare gnarled limbs, nothing living. East of
@@ -55,7 +55,7 @@ const GROVE_R = 190;
  */
 export const DEAD_WOOD_X = -260;
 const WOODS_EDGE_X = DEAD_WOOD_X;
-const GREENWOOD_EDGE_X = 260;
+export const GREENWOOD_EDGE_X = 260;
 /** The henge stands deep in the greenwood. */
 export const HENGE_POS = { x: 760, y: 760 };
 

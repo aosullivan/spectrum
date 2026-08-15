@@ -44,6 +44,7 @@ import {
   type OverlayState,
 } from "@/lib/rpg/render";
 import { Screen } from "@/lib/rpg/screen";
+import { paletteAt } from "@/lib/rpg/regions";
 import { drawAreaMap } from "@/lib/rpg/areamap";
 import {
   CIRCLE_POS,
@@ -561,6 +562,10 @@ export class Game {
   }
 
   render(screen: Screen): void {
+    // Indoors the camera is in room coordinates, so a building takes the
+    // palette of the ground it stands on rather than of the origin.
+    const ground = this.interior ? this.doorstep : this.cam;
+    screen.palette = paletteAt(ground.x, ground.y);
     const overlay = this.overlay();
     // The haloed actor is the one the key would act on — the same test the
     // prompt uses, so the two can never disagree about what you are near.
