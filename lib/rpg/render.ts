@@ -13,7 +13,9 @@ import {
 } from "@/lib/rpg/assets";
 import { KEEP_MID, KEEP_NEAR } from "@/lib/rpg/art";
 import { rampColour, type Ramp } from "@/lib/rpg/dither";
-import { B, BC, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
+import { LOOK } from "@/lib/rpg/look";
+import { B, BC, BW, BY, C, G, K, RAMP_S0, W } from "@/lib/rpg/palette";
+import { terrainHeight } from "@/lib/rpg/terrain";
 import {
   REFERENCE_HERO_BACK,
   REFERENCE_HERO_STAFF,
@@ -43,6 +45,7 @@ import {
   VILLAGE_POS,
   featuresNear,
   groundColour,
+  groundRamp,
 } from "@/lib/rpg/world";
 import { VILLAGE_BOXES } from "@/lib/rpg/village";
 
@@ -66,6 +69,9 @@ const MOON_AZIMUTH = -0.72;
 
 /** Night air thickening toward the horizon. Two steps is all it needs. */
 const SKY_RAMP: Ramp = [K, B];
+
+/** The ULAplus sky rows: a real zenith-to-horizon gradient (see palette.ts). */
+const SKY_RAMP_ULAPLUS: Ramp = [RAMP_S0, RAMP_S0 + 1, RAMP_S0 + 2, RAMP_S0 + 3];
 
 /**
  * Height of a range of hills above the horizon at an azimuth, in pixels.
@@ -97,16 +103,26 @@ function ridgeAt(wx: number, range: number): number {
 function drawSky(s: Screen, yaw: number, dead: boolean): void {
   const scroll = Math.round(yaw * SKY_PX_PER_RAD);
   const skyline = dead ? W : G;
-  // A black sky is still a graded sky: a thin dither of blue into black low
-  // down is what stops the upper frame reading as a void. It has to stay
-  // faint — much past a fifth coverage it stops being air and becomes a
-  // painted band competing with the horizon. It goes first, so the stars and
-  // the copse sit on top of it rather than being swallowed.
-  const glowTop = HORIZON - 18;
-  for (let y = glowTop; y < HORIZON; y++) {
-    const level = ((y - glowTop) / 18) * 0.2;
-    for (let x = 0; x < SCREEN_W; x++) {
-      if (rampColour(SKY_RAMP, level, x, y) !== K) s.px(x, y, B);
+  // The sky's ground tone goes down first, so the stars, the ranges and the
+  // copse all stand in front of it. Under the ULAplus ramps it is a true
+  // zenith-to-horizon gradient through the palette's sky rows; otherwise a
+  // thin dither of blue into black low down — faint on purpose, since much
+  // past a fifth coverage it stops being air and becomes a painted band
+  // competing with the horizon.
+  if (LOOK.ramps) {
+    for (let y = 0; y < HORIZON; y++) {
+      const level = Math.pow(y / (HORIZON - 1), 1.7);
+      for (let x = 0; x < SCREEN_W; x++) {
+        s.px(x, y, rampColour(SKY_RAMP_ULAPLUS, level, x, y));
+      }
+    }
+  } else if (LOOK.skyGlow) {
+    const glowTop = HORIZON - 18;
+    for (let y = glowTop; y < HORIZON; y++) {
+      const level = ((y - glowTop) / 18) * 0.2;
+      for (let x = 0; x < SCREEN_W; x++) {
+        if (rampColour(SKY_RAMP, level, x, y) !== K) s.px(x, y, B);
+      }
     }
   }
   // The land itself, standing between the stars and the moor: a far range
@@ -260,6 +276,89 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
         continue;
       }
       s.fb[rowBase + sx] = colour;
+    }
+  }
+  return ley;
+}
+
+/**
+ * Slope shading: move a colour one step along the look's ground ramp.
+ * Colours that are not on the ramp — stones, water, cobbles — keep their
+ * own light and pass through untouched.
+ */
+function shiftInRamp(colour: number, shade: number): number {
+  const ramp = groundRamp();
+  const i = ramp.indexOf(colour);
+  if (i < 0) return colour;
+  return ramp[Math.min(ramp.length - 1, Math.max(0, i + shade))];
+}
+
+/**
+ * The relief ground: per-column voxel-space march over the heightfield.
+ * Near-to-far, each column fills upward from the last drawn row, so a near
+ * ridge naturally occludes the valley behind it and crests rise past the
+ * flat-world horizon into the sky. Returns leyline light for post-pass
+ * compositing, exactly like the flat renderer.
+ */
+function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
+  const ley: number[] = [];
+  const sin = Math.sin(cam.yaw);
+  const cos = Math.cos(cam.yaw);
+  const cx = cam.x - sin * CAM_BACK;
+  const cy = cam.y - cos * CAM_BACK;
+  const eyeAbs = eyeHeight(cam) + terrainHeight(cam.x, cam.y);
+  // Ridges occlude what stands behind them: every painted ground pixel
+  // records its depth, and blitScaled refuses to paint a farther sprite
+  // over a nearer hillside.
+  const gz = s.acquireGroundZ();
+  /** Ridges may climb this far into the sky before a column stops. */
+  const CAP = 14;
+  for (let sx = 0; sx < SCREEN_W; sx++) {
+    let bottom = HUD_TOP;
+    let prevRow = HUD_TOP + 8;
+    let prevWx = cx;
+    let prevWy = cy;
+    let prevH = eyeAbs - eyeHeight(cam);
+    let prevZ = 1;
+    for (let z = 12; z < 3800 && bottom > CAP; z += 2 + z * 0.02) {
+      const l = ((sx - 128) * z) / FOCAL;
+      const wx = cx + sin * z + cos * l;
+      const wy = cy + cos * z - sin * l;
+      const h = terrainHeight(wx, wy);
+      const row = HORIZON + ((eyeAbs - h) * FOCAL) / z;
+      if (row < bottom) {
+        // Slopes rising away present their face to the viewer and catch
+        // the moon; falling ground turns away into shadow.
+        const grade = (h - prevH) / Math.max(1, z - prevZ);
+        const shade = grade > 0.055 ? 1 : grade < -0.055 ? -1 : 0;
+        // The same falloff as the flat renderer, so a hillside recedes on
+        // exactly the terms the level moor does.
+        const far = 1 - Math.min(1, (z / 2400) ** 0.55);
+        const top = Math.max(Math.ceil(row), CAP);
+        for (let y = bottom - 1; y >= top; y--) {
+          const f = (y - row) / (prevRow - row);
+          const swx = wx + (prevWx - wx) * f;
+          const swy = wy + (prevWy - wy) * f;
+          let colour = groundColour(swx, swy, z / FOCAL, t, sx, y, far);
+          const idx = y * SCREEN_W + sx;
+          if (colour === BC || colour === C) {
+            // Leyline light overlays after the clash pass; the hillside
+            // under it is mid-ramp soil, not a hole.
+            ley.push(idx, colour);
+            colour = rampColour(groundRamp(), 0.45 * far, sx, y);
+          } else if (shade !== 0) {
+            colour = shiftInRamp(colour, shade);
+          }
+          s.fb[idx] = colour;
+          gz[idx] = z;
+        }
+        bottom = top;
+      }
+      prevRow = row;
+      prevWx = wx;
+      prevWy = wy;
+      prevH = h;
+      prevZ = z;
     }
   }
   return ley;
@@ -564,7 +663,7 @@ export function renderFrame(
 ): void {
   s.clear();
   drawSky(s, cam.yaw, cam.x < DEAD_WOOD_X);
-  const ley = drawGround(s, cam, t);
+  const ley = LOOK.hills ? drawGroundRelief(s, cam, t) : drawGround(s, cam, t);
   if (platform) drawPlatform(s, cam, platform);
   s.attributePass(0, HUD_TOP);
   for (let i = 0; i < ley.length; i += 2) s.fb[ley[i]] = ley[i + 1];
@@ -596,7 +695,13 @@ export function renderFrame(
     ...(omit?.has("keep") || keepDistance > 800 ? [] : collectFaces(cam, KEEP_BOXES)),
     ...(villageDistance > 850 ? [] : collectFaces(cam, VILLAGE_BOXES)),
     ...(hermitageDistance > 700 ? [] : collectFaces(cam, HERMITAGE_BOXES)),
-    ...collectBillboards(cam, [...distantKeep, ...features, ...entities], t),
+    ...collectBillboards(
+      cam,
+      [...distantKeep, ...features, ...entities],
+      t,
+      null,
+      LOOK.hills ? terrainHeight : null,
+    ),
   ];
   jobs.sort((a, b) => b.z - a.z);
   for (const j of jobs) j.paint(s);
