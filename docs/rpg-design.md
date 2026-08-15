@@ -12,14 +12,17 @@ but runs on a modern TypeScript engine at 60fps.
 ## The two laws
 
 1. **Looks real, runs free.** Every frame must be plausible Spectrum-family output:
-   256×192 logical pixels, the 15-colour palette for sprites, HUD and light, plus
-   ULAplus-fiction terrain rows — per-region 4-step ground and sky value ramps
-   (palette 16–23) — background art limited to 2 colours per 8×1 attribute strip
-   (the Timex hi-colour fiction), presented through subtle CRT glass by default
-   (toggleable). Amended from 8×8 cells / 15 colours flat with the Dusk look, then
-   to the Relief look (ramps + rolling heightfield + CRT), both 2026-08-15. But the
-   engine is modern TS — unlimited memory, smooth 60fps, real floating-point math.
-   The Z80 emulator elsewhere in this repo is not involved.
+   256×192 logical pixels, the 15-colour palette for everything that is *paint* —
+   sprites and HUD — plus ULAplus-fiction rows for everything that is *light*:
+   per-region value ramps for ground, sky, stone, foliage and ley-light, and one
+   dim rung under each hue, 63 entries of ULAplus's 64. Background art is limited
+   to 2 colours per 8×1 attribute strip (the Timex hi-colour fiction), presented
+   through subtle CRT glass by default (toggleable). Amended from 8×8 cells /
+   15 colours flat with the Dusk look, then to the Relief look (4-step ramps at
+   palette 16–23 + rolling heightfield + CRT), then to the Shades look (the ramps
+   widened and three more families added) — all 2026-08-15. But the engine is
+   modern TS — unlimited memory, smooth 60fps, real floating-point math. The Z80
+   emulator elsewhere in this repo is not involved.
 2. **Open world, honestly.** Free roaming in every direction is a first-class promise.
    Distant landmarks are real places at real bearings: *see a castle on the horizon →
    walk to it → enter it.* No corridors dressed as worlds.
@@ -29,8 +32,8 @@ but runs on a modern TypeScript engine at 60fps.
 | Branch | Decision |
 |---|---|
 | Runtime | Modern TS engine; Spectrum display lens. Emulator untouched. |
-| Look | **"Leyline — Relief"** (adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day): a shaded ULAplus world — gradient night sky, mottled tonal ground, lit leyline verge — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Flags in `lib/rpg/look.ts`; Dusk and the original void-black look survive as presets. |
-| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Terrain-only palette rows: index 8 earth tone, 16–19 ground ramp, 20–23 sky ramp (black stays black for water and sprite work). Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
+| Look | **"Leyline — Relief, shaded"** (Relief adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day; the shades round adopted later the same day): a shaded ULAplus world — gradient night sky, tonal ground modelled rather than dithered, masonry with lit and shadowed faces, distance spent in value — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Flags in `lib/rpg/look.ts` (`V` drops back to the four-step ramps in game); Relief, Dusk and the original void-black look survive as presets. |
+| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Non-sprite palette rows, all derived from the sixteen colours and four soil / four sky tones a region table authors: index 8 earth tone, then ground (16–26), sky (27–33), stone (34–40), leaf (41–47), ley-light (48–54) and a dim rung per hue (55–62). Black stays black for water and sprite work. New shades interleave *between* the shipped ones, so the earlier four-step ladders are the even rungs and the look A/Bs against itself. Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
 | Camera | Smooth Mode-7-style rotation; hero at your back; the attribute grid stays fixed to the "glass" while the world turns beneath it. |
 | World | Open biomes (woods, plains, moor) + enterable sites (castles, towers, barrow dungeons). Interiors use the same perspective camera with walls closing in. |
 | Mechanics | Action-RPG: real-time aimed bolts + wards + utility spells; lifeforce; inventory and quest items; light stats that can deepen later. |
@@ -71,8 +74,12 @@ layout · music direction.
 - Indexed 256×192 framebuffer (Uint8 palette indices) drawn per-frame in TS:
   Mode-7 ground-plane scanlines below the horizon, billboard sprites scaled by 1/z
   and painter-sorted, hero composited last before the HUD.
-- Post passes over the framebuffer: attribute quantize (per 8×8 cell keep the two
-  dominant colours), then present scaled with nearest-neighbour + CRT overlay.
+- Post passes over the framebuffer: attribute quantize (per 8×1 strip keep the two
+  dominant colours, strays snapped to the nearer survivor in RGB), then present
+  scaled with nearest-neighbour + CRT overlay.
+- Shading is one mechanism everywhere: a smooth field resolved into two
+  *neighbouring* ramp rungs by an ordered dither, so a shaded cell holds exactly
+  two colours and survives the clash pass. Distance darkens rather than dithers.
 - Deterministic hash-based terrain detail (no per-frame RNG), authored biome/site
   data over it.
 - Sprites authored as string-array bitmaps (one char per pixel, char→colour legend).

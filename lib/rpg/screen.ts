@@ -2,7 +2,7 @@
 // drawn back-to-front each frame, then presented to a canvas in one pass.
 
 import { LOOK } from "@/lib/rpg/look";
-import { K, PALETTE_RGB, T, type PaletteTable } from "@/lib/rpg/palette";
+import { K, PALETTE_RGB, T, dimTable, type PaletteTable } from "@/lib/rpg/palette";
 
 export const SCREEN_W = 256;
 export const SCREEN_H = 192;
@@ -228,7 +228,12 @@ export class Screen {
     tint?: number,
     depth?: Float32Array | null,
     z = 0,
+    shade = 0,
   ): void {
+    // Distance as tone: every opaque pixel steps that many rungs down its own
+    // family's ladder (see palette.ts). A lookup rather than a call per pixel
+    // — a near billboard is a thousand pixels wide.
+    const dim = dimTable(shade);
     const w = Math.max(1, Math.round(dw));
     const h = Math.max(1, Math.round(dh));
     const x0 = Math.round(bx - w / 2);
@@ -301,7 +306,7 @@ export class Screen {
               Math.min(spr.h, Math.max(sy + 1, Math.ceil((dy + 1) * stepY))),
             )
           : spr.data[sy * spr.w + sx];
-        if (colour !== T) this.px(px, py, tint ?? colour);
+        if (colour !== T) this.px(px, py, tint ?? (dim ? dim[colour] : colour));
       }
     }
   }
@@ -311,6 +316,12 @@ export class Screen {
    * the block is covered to be worth drawing. The coverage threshold is what
    * decides how a shrinking sprite dies: too high and line art evaporates,
    * too low and every distant creature bloats into the same blob.
+   *
+   * The histogram is sixteen wide because sprite art is sixteen colours —
+   * the ULAplus rows above them are lighting, applied to a sprite after this
+   * vote (see `blitScaled`), never authored into one. Paint a ramp index into
+   * sprite data and it would vanish here without a word: a typed array drops
+   * out-of-range writes, and the tally below only reads the ULA rows.
    */
   private vote(spr: Sprite, x0: number, x1: number, y0: number, y1: number): number {
     const counts = this.tally;

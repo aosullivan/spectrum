@@ -6,17 +6,20 @@
 
 import { NPC_SEER, NPC_SHADE } from "@/lib/rpg/bestiary";
 import { EXIT_ARCH, ITEM_KEY, ITEM_TORC, TORC_FRAMES } from "@/lib/rpg/items";
+import { LOOK } from "@/lib/rpg/look";
 import {
   B,
   BC,
   BW,
   BY,
   C,
+  DIM0,
   K,
   R,
   TORCHLIT,
   W,
   Y,
+  dimmed,
   type PaletteTable,
 } from "@/lib/rpg/palette";
 import type { Actor } from "@/lib/rpg/interact";
@@ -517,6 +520,17 @@ function drawFloor(s: Screen, interior: Interior, cam: CameraState): void {
           s.fb[sy * SCREEN_W + sx] = lit > 0.78 ? BY : Y;
           continue;
         }
+        // Between and beyond the bright embers, the pool's last reach is
+        // the dim amber rung, so firelight fades out through a value
+        // instead of stopping at a stipple's edge.
+        if (
+          LOOK.shades &&
+          lit > 0.04 &&
+          hash(Math.floor(wx / 1.8) + 5, Math.floor(wy / 1.8)) < lit * 900
+        ) {
+          s.fb[sy * SCREEN_W + sx] = DIM0 + Y;
+          continue;
+        }
         // The slab faces carry a sparse blue grit near the eye — polished
         // stone catching what little light there is — and go black with
         // distance by having that ink taken away.
@@ -705,7 +719,16 @@ function drawWalls(
     // on the one distinction worth having: near faces come forward, far ones
     // sit back. Faces square to the plan's two axes take different ones so
     // that a corner reads as a corner rather than as a line on a flat hole.
-    const line = mid.z < 200 && face.side === 0 ? BW : W;
+    //
+    // With the dim rungs under it there are more than two, so the same
+    // distinction is drawn in tone rather than rationed: the junction lines
+    // at the far end of a hall go down the ladder instead of staying at
+    // full white, and they recede with the ashlar they belong to.
+    const line = LOOK.shades
+      ? dimmed(face.side === 0 ? BW : W, mid.z > 300 ? 2 : mid.z > 150 ? 1 : 0)
+      : mid.z < 200 && face.side === 0
+        ? BW
+        : W;
 
     // A seam draws only where the wall actually turns or steps — a face
     // group ends at every grid cell, and seaming every group boundary
