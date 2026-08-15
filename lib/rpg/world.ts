@@ -37,9 +37,10 @@ import {
   HERMITAGE_PROPS,
   HERMITAGE_R,
 } from "@/lib/rpg/hermitage";
-import { LOOK } from "@/lib/rpg/look";
+import { LOOK, allSoilMat, daylight } from "@/lib/rpg/look";
 import {
   B,
+  BB,
   BC,
   BG,
   BW,
@@ -151,33 +152,38 @@ const GROUND_RAMP_SHADED: Ramp = Array.from(
   { length: RAMP_G_N },
   (_, i) => RAMP_G0 + i,
 );
-// The night-key ladders (see look.ts), one per resolution. The day ladders
-// climb from soil into green ink, which is why the near field could go
-// neon; at night the mat ends in soil — "moonlit" is the authored soil
-// span alone (its adopted coarse form was the four anchors; under shades,
-// the same span sampled twice as finely), and "meadow" keeps one green
-// step so bright ink survives only at the tuft crests. Green marks growth,
-// never ground.
-const GROUND_RAMP_NIGHT_MEADOW: Ramp = [
+// The keyed ladders (see look.ts), one per resolution. The ladder the tables
+// ship with climbs from soil into green ink, which is why the near field
+// could go neon; every key anyone plays in ends the mat in soil instead.
+// "moonlit" and "day" are the authored soil span alone (its adopted coarse
+// form was the four anchors; under shades, the same span sampled twice as
+// finely) — the same span, and the same reason: green marks growth, never
+// ground, whether the light comes from a moon or a sun. "meadow" keeps one
+// green step so bright ink survives at the tuft crests.
+//
+// The day key needs no ladder of its own because its *anchors* are different
+// (see applyKey in palette.ts): the same rungs resolve to shadowed earth
+// through lit turf rather than to soil in the dark.
+const GROUND_RAMP_MEADOW: Ramp = [
   RAMP_G0,
   RAMP_G0 + 2,
   RAMP_G0 + 4,
   RAMP_G0 + 6,
   G,
 ];
-const GROUND_RAMP_NIGHT_MOONLIT: Ramp = [
+const GROUND_RAMP_SOIL: Ramp = [
   RAMP_G0,
   RAMP_G0 + 2,
   RAMP_G0 + 4,
   RAMP_G0 + 6,
 ];
 /** The soil span of the shaded ladder: interleave(soil), rows 16..22. */
-const GROUND_RAMP_NIGHT_MOONLIT_SHADED: Ramp = Array.from(
+const GROUND_RAMP_SOIL_SHADED: Ramp = Array.from(
   { length: 7 },
   (_, i) => RAMP_G0 + i,
 );
 /** Everything but the bright-green rung: soil, turf bridges, green. */
-const GROUND_RAMP_NIGHT_MEADOW_SHADED: Ramp = Array.from(
+const GROUND_RAMP_MEADOW_SHADED: Ramp = Array.from(
   { length: RAMP_G_N - 1 },
   (_, i) => RAMP_G0 + i,
 );
@@ -186,15 +192,44 @@ const GROUND_RAMP_NIGHT_MEADOW_SHADED: Ramp = Array.from(
 export function groundRamp(): Ramp {
   if (LOOK.ramps) {
     if (LOOK.shades) {
-      if (LOOK.night === "meadow") return GROUND_RAMP_NIGHT_MEADOW_SHADED;
-      if (LOOK.night === "moonlit") return GROUND_RAMP_NIGHT_MOONLIT_SHADED;
+      if (LOOK.key === "meadow") return GROUND_RAMP_MEADOW_SHADED;
+      if (allSoilMat()) return GROUND_RAMP_SOIL_SHADED;
       return GROUND_RAMP_SHADED;
     }
-    if (LOOK.night === "meadow") return GROUND_RAMP_NIGHT_MEADOW;
-    if (LOOK.night === "moonlit") return GROUND_RAMP_NIGHT_MOONLIT;
+    if (LOOK.key === "meadow") return GROUND_RAMP_MEADOW;
+    if (allSoilMat()) return GROUND_RAMP_SOIL;
     return GROUND_RAMP_ULAPLUS;
   }
   return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
+}
+
+/**
+ * How far up the ramp a lushness `level` sits once distance has had its say.
+ *
+ * At night distance is simply an absence of light: the field scales toward
+ * the bottom of the ramp and the moor fades into its own darkness. Daylight
+ * works the other way round — air is not empty, and the far moor is *paler
+ * and flatter* than the near one, not darker. So the day key blends toward a
+ * fixed mid-ramp haze instead of toward zero, which lifts the distance and,
+ * because the blend also shrinks the field's swing, quiets its noise at the
+ * same time.
+ */
+const HAZE_LEVEL = 0.56;
+
+export function groundLevel(level: number, far: number): number {
+  return daylight() ? level * far + HAZE_LEVEL * (1 - far) : level * far;
+}
+
+/**
+ * Ground that is deliberately *not* the mat — a swept yard, a trodden path,
+ * the margin of a sown bed. At night these return black outright, which is
+ * why they read as worn: the mat's darkness becomes soil under the look's
+ * ramp, and theirs does not. Under the sun black is no longer a surface at
+ * all, so the same ground takes a low rung of the ladder and keeps its marks;
+ * it is still the one patch around with no growth on it.
+ */
+function bareEarth(): number {
+  return daylight() ? RAMP_G0 + 2 : K;
 }
 
 /**
@@ -338,8 +373,15 @@ export function groundColour(
     // Star-glints: single pixels, appearing and going out.
     if (hash(ix * 3 + Math.floor(t * 1.5), iy * 5) < 5) return BW;
     // A whisper of deep blue in the black keeps it reading as water.
-    if (hash(ix >> 1, iy >> 1) < 85 && (ix + iy) % 2 === 0) return B;
-    return K;
+    // A whisper of deep blue in the black keeps it reading as water. By day
+    // a mirror reflects a bright sky, so the pair steps up rather than
+    // changing character: bright blue broken over blue. Not C — the ground
+    // pass reads cyan as leyline light and lifts it out of the clash, which
+    // is right for the rings above and wrong for the body of the water.
+    if (hash(ix >> 1, iy >> 1) < 85 && (ix + iy) % 2 === 0) {
+      return daylight() ? BB : B;
+    }
+    return daylight() ? B : K;
   }
   if (gd < GROVE_R) {
     // The shore: a dark wet lip, then a silvered verge where the moon
@@ -356,7 +398,7 @@ export function groundColour(
     if (gx < 4) {
       const wob = ((hash(ix >> 4, 991) % 5) - 2) * 0.9;
       if (Math.abs(gy - wob) < 3.2) {
-        return hash(ix, iy + 17) < 55 ? W : K;
+        return hash(ix, iy + 17) < 55 ? W : bareEarth();
       }
     }
   }
@@ -376,7 +418,7 @@ export function groundColour(
     const cobble = hash(ix >> 1, iy >> 1);
     if (cobble < 95 && (ix + iy) % 3 === 0) return W;
     if ((iy & 15) === 0 && (ix & 7) < 3) return W;
-    return K;
+    return bareEarth();
   }
 
   // --- the hermit's plot: the one bed of living green in the dead wood, and
@@ -385,7 +427,7 @@ export function groundColour(
   const hy = wy - (HERMITAGE_POS.y - 76);
   if (Math.abs(hx) < 46 && Math.abs(hy) < 30) {
     // Sown in rows, so it reads as tended rather than as a patch of weed.
-    if (Math.abs(hy) > 26 || Math.abs(hx) > 42) return K;
+    if (Math.abs(hy) > 26 || Math.abs(hx) > 42) return bareEarth();
     if (iy % 7 < 3 && hash(ix, iy + 3131) < 620) {
       return hash(ix, iy + 4242) < 90 ? BG : G;
     }
@@ -543,7 +585,7 @@ export function groundColour(
     return W;
   }
 
-  return rampColour(groundRamp(), level * far, sx, sy);
+  return rampColour(groundRamp(), groundLevel(level, far), sx, sy);
 }
 
 // ------------------------------------------------------------------ features

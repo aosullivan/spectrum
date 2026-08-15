@@ -12,7 +12,7 @@
 
 import { LOOK } from "@/lib/rpg/look";
 import {
-  applyNightSky,
+  applyKey,
   EMBER_DUSK,
   MOONLIT,
   PAL_TELEVISION,
@@ -72,13 +72,13 @@ function mix(
  * West to east the world runs dead wood, moor, greenwood, and each band has its
  * own weather: the old wood is dying under a late warm sun, the moor is the
  * cold electric baseline, the greenwood is softened like a picture on a
- * television. The grove overrides whichever band it sits in — still water under
- * a moon is the one place that should not look like the forest around it.
+ * television. The grove overrides whichever band it sits in — still water is
+ * the one place that should not look like the forest around it.
  */
 export function paletteAt(x: number, y: number): PaletteTable {
-  // The night key swaps sky-row values inside the base tables, so it has to
-  // land before any of them is read or blended from.
-  applyNightSky(LOOK.night !== "off");
+  // The key swaps ground- and sky-row values inside the base tables, so it
+  // has to land before any of them is read or blended from.
+  applyKey(LOOK.key === "off" ? "off" : LOOK.key === "day" ? "day" : "night");
   let out: PaletteTable = ULA_STANDARD;
   if (x < DEAD_WOOD_X + BAND_FADE) {
     out = mix(

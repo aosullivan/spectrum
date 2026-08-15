@@ -75,6 +75,12 @@ export function RpgGame() {
         });
         return;
       }
+      // The key the world is lit by. LOOK is read afresh every frame, so
+      // flipping it here is the whole of the switch.
+      if (down && !e.repeat && e.code === "KeyN") {
+        setLook({ key: LOOK.key === "day" ? "moonlit" : "day" });
+        return;
+      }
       // Commands are edge-triggered: the game consumes them and key-repeat
       // must not turn one press into several actions.
       if (e.code === "Space") {

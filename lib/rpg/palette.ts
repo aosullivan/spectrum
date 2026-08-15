@@ -129,6 +129,29 @@ function familyRamp(black: Rgb, mid: Rgb, top: Rgb): Rgb[] {
   ]);
 }
 
+
+/**
+ * The ground ladder from four soil anchors. It climbs out of the soil rows
+ * and on into the living greens, so one ramp carries bare earth and turf
+ * without a seam where they meet. The soil rows interleave with their own
+ * midpoints; the long haul from the top soil to full green gets two bridging
+ * tones instead, placed by eye rather than by halving — a midpoint between
+ * dark olive and a saturated green is most of the way to the green already,
+ * so halving that gap spends a rung on nothing and leaves the climb as steep
+ * as it was.
+ *
+ * Named rather than inlined because the key swaps these anchors at runtime
+ * (see applyKey) and a ladder built two ways is a ladder that drifts.
+ */
+function groundLadder(soil: readonly Rgb[], green: Rgb, brightGreen: Rgb): Rgb[] {
+  return [
+    ...interleave(soil),
+    ...[0.28, 0.6].map((t) => mixRgb(soil[3], green, t)),
+    green,
+    brightGreen,
+  ];
+}
+
 /**
  * Twenty-four `rrggbb` words in ULA index order — the normal row on the
  * first line, the bright row on the second, so a table reads like the
@@ -143,6 +166,9 @@ function familyRamp(black: Rgb, mid: Rgb, top: Rgb): Rgb[] {
  * each normal hue taken most of the way out. A table therefore still says
  * only what a Spectrum artist would have chosen — sixteen colours and the
  * weather — and the sixty-three the renderer sees follow from it.
+ *
+ * The third line is the anchors under the key the tables ship in. The other
+ * keys supply their own; see applyKey.
  */
 function table(...hex: string[]): PaletteTable {
   const ula = hex.slice(0, 16).map(rgbOf);
@@ -151,18 +177,7 @@ function table(...hex: string[]): PaletteTable {
   const black = ula[K];
   const out: Rgb[] = [
     ...ula,
-    // Ground climbs out of the soil rows and on into the living greens, so
-    // one ramp carries bare earth and turf without a seam where they meet.
-    // The soil rows interleave with their own midpoints; the long haul from
-    // the top soil to full green gets two bridging tones instead, placed by
-    // eye rather than by halving — a midpoint between dark olive and a
-    // saturated green is most of the way to the green already, so halving
-    // that gap spends a rung on nothing and leaves the climb as steep as it
-    // was.
-    ...interleave(soil),
-    ...[0.28, 0.6].map((t) => mixRgb(soil[3], ula[G], t)),
-    ula[G],
-    ula[BG],
+    ...groundLadder(soil, ula[G], ula[BG]),
     ...interleave(sky),
     ...familyRamp(black, ula[W], ula[BW]),
     ...familyRamp(black, ula[G], ula[BG]),
@@ -229,47 +244,135 @@ export const TORCHLIT = table(
   "150d06", "221709", "31220e", "422f14", "0a0510", "180b28", "281444", "3c2060",
 );
 
-// --------------------------------------------------------------- night key
+// --------------------------------------------------------------------- keys
 //
-// The `night` look lifts the sky ramp from near-black to a just-visible
-// navy: night air instead of void. Each table pairs with four night
-// ANCHORS, zenith to horizon, in its own cast — cold navy on the moor,
-// softened in the greenwood, warmed toward violet in the ember west — and
-// the seven live rows are those anchors interleaved, exactly as table()
-// builds the day ramp. Swapping values under fixed indices is what a real
-// ULAplus palette reload did, so the fiction holds, and keeping it a
-// runtime swap keeps every older preset bit-for-bit when the dial is off.
+// A key is the light the world is under, and a region's weather under it is
+// nothing but its eight ULAplus anchors — four soil, four sky. Swapping
+// values under fixed indices is what a real ULAplus palette reload did, so
+// the fiction holds; keeping it a runtime swap keeps every older preset
+// bit-for-bit when the dial is off, since the tables ship in their own key
+// and are only written to when another one is asked for.
+//
+// The NIGHT anchors lift the sky ramp from near-black to a just-visible navy
+// — night air instead of void — each table in its own cast: cold navy on the
+// moor, softened in the greenwood, warmed toward violet in the ember west.
+// The ground keeps the shipped soil under every night mode; how far up it the
+// mat is allowed to climb is a ramp question, not a palette one (see
+// groundRamp in world.ts).
+//
+// The DAY anchors are the whole of the daylight key. Soil first: shadowed
+// earth, turned earth, dry ochre, lit turf — the ground gets real colours
+// rather than degrees of darkness, and because the ladder derives from these
+// four, so do the turf bridges above them. Then sky: a banded blue opening to
+// a pale horizon. Nothing else about the sun needs saying here.
+//
+// TORCHLIT is absent from both on purpose: it paints interiors, and no
+// interior draws a sky or a moor.
 
-// TORCHLIT is absent on purpose: it paints interiors, and no interior ever
-// draws the sky.
-const NIGHT_SKY: ReadonlyArray<[PaletteTable, readonly Rgb[]]> = [
-  [ULA_STANDARD, ["0a1430", "132242", "1c3058", "24386a"].map(rgbOf)],
-  [PAL_TELEVISION, ["0c1428", "141f3a", "1c2c50", "263862"].map(rgbOf)],
-  [DEEP_CONTRAST, ["0a1226", "101c3a", "182a52", "22386a"].map(rgbOf)],
-  [JEWEL, ["0a1230", "121f44", "1a2d5e", "243c78"].map(rgbOf)],
-  [MOONLIT, ["0c1626", "14223c", "1c3054", "263e66"].map(rgbOf)],
-  [EMBER_DUSK, ["140b26", "22123c", "321c54", "46286c"].map(rgbOf)],
+interface KeyAnchors {
+  /** Four soil tones, dark to lit. Absent means "keep the shipped soil". */
+  soil?: readonly Rgb[];
+  /** Four sky tones, zenith to horizon. */
+  sky: readonly Rgb[];
+}
+
+const anchors = (soil: string[] | null, sky: string[]): KeyAnchors => ({
+  soil: soil?.map(rgbOf),
+  sky: sky.map(rgbOf),
+});
+
+const KEYED: ReadonlyArray<[PaletteTable, KeyAnchors, KeyAnchors]> = [
+  [
+    ULA_STANDARD,
+    anchors(null, ["0a1430", "132242", "1c3058", "24386a"]),
+    anchors(
+      ["3c2e1c", "6f5228", "8c7a30", "86b83c"],
+      ["3d72c4", "55a0d4", "86cce0", "bceaf0"],
+    ),
+  ],
+  [
+    PAL_TELEVISION,
+    anchors(null, ["0c1428", "141f3a", "1c2c50", "263862"]),
+    anchors(
+      ["34301e", "5c5828", "78843a", "62b048"],
+      ["4a7ab8", "62a6c8", "92d0d8", "c4ece8"],
+    ),
+  ],
+  [
+    DEEP_CONTRAST,
+    anchors(null, ["0a1226", "101c3a", "182a52", "22386a"]),
+    anchors(
+      ["342818", "645020", "8c7c2c", "68b034"],
+      ["3468bc", "4ca0d4", "84cce4", "c0ecf4"],
+    ),
+  ],
+  [
+    JEWEL,
+    anchors(null, ["0a1230", "121f44", "1a2d5e", "243c78"]),
+    anchors(
+      ["3a2c18", "6c5024", "a08034", "70bc34"],
+      ["2c6cc8", "48a8dc", "80cce8", "bcecf8"],
+    ),
+  ],
+  [
+    MOONLIT,
+    anchors(null, ["0c1626", "14223c", "1c3054", "263e66"]),
+    // The grove is the coolest ground in the world at any hour: silvered
+    // turf under a sky that keeps more of its blue than the moor's does.
+    anchors(
+      ["2c3c38", "4c6458", "6e8c74", "80c498"],
+      ["3a6cb0", "5298c8", "8cc4d4", "bce4e8"],
+    ),
+  ],
+  [
+    EMBER_DUSK,
+    anchors(null, ["140b26", "22123c", "321c54", "46286c"]),
+    // The dead wood by day stands on dust and dry bracken, under a sky the
+    // heat has bleached toward straw at the horizon.
+    anchors(
+      ["463018", "745224", "a08238", "b4c850"],
+      ["5c80bc", "84aacc", "b4cedc", "e8e8c8"],
+    ),
+  ],
 ];
 
-/** The tables' own sky rows, copied before any swap so off restores exactly. */
-const DAY_SKY: ReadonlyArray<PaletteTable> = NIGHT_SKY.map(([t]) =>
-  t.slice(RAMP_S0, RAMP_S0 + RAMP_S_N).map((c) => [...c] as const),
+/** The tables as authored, copied before any swap so "off" restores exactly. */
+const SHIPPED: ReadonlyArray<{ ground: PaletteTable; sky: PaletteTable }> = KEYED.map(
+  ([t]) => ({
+    ground: t.slice(RAMP_G0, RAMP_G0 + RAMP_G_N).map((c) => [...c] as const),
+    sky: t.slice(RAMP_S0, RAMP_S0 + RAMP_S_N).map((c) => [...c] as const),
+  }),
 );
 
-let nightApplied = false;
+function writeRows(into: PaletteTable, at: number, rows: readonly Rgb[]): void {
+  for (let r = 0; r < rows.length; r++) {
+    const dst = into[at + r] as unknown as [number, number, number];
+    dst[0] = rows[r][0];
+    dst[1] = rows[r][1];
+    dst[2] = rows[r][2];
+  }
+}
 
-/** Write the day or night sky rows into every table, in place. */
-export function applyNightSky(on: boolean): void {
-  if (on === nightApplied) return;
-  nightApplied = on;
-  NIGHT_SKY.forEach(([into, anchors], i) => {
-    const rows = on ? interleave(anchors) : DAY_SKY[i];
-    for (let r = 0; r < RAMP_S_N; r++) {
-      const dst = into[RAMP_S0 + r] as unknown as [number, number, number];
-      dst[0] = rows[r][0];
-      dst[1] = rows[r][1];
-      dst[2] = rows[r][2];
-    }
+let applied: "off" | "night" | "day" = "off";
+
+/**
+ * Install a key's anchors in every table, in place. The night modes share
+ * one set of anchors — they differ in how far up the ground ramp the mat
+ * climbs, which is not a palette question — so this only distinguishes the
+ * three states the tables can actually be in.
+ */
+export function applyKey(key: "off" | "night" | "day"): void {
+  if (key === applied) return;
+  applied = key;
+  KEYED.forEach(([into, night, day], i) => {
+    const set = key === "day" ? day : key === "night" ? night : null;
+    const ula = into as unknown as Rgb[];
+    writeRows(
+      into,
+      RAMP_G0,
+      set?.soil ? groundLadder(set.soil, ula[G], ula[BG]) : SHIPPED[i].ground,
+    );
+    writeRows(into, RAMP_S0, set ? interleave(set.sky) : SHIPPED[i].sky);
   });
 }
 
