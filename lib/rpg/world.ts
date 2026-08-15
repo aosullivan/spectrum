@@ -237,7 +237,7 @@ export function groundColour(
     if (gd < POOL_R + 2.2) return B;
     if (gd < POOL_R + 10) {
       const vh = hash(ix, iy ^ 0x3c3c);
-      if (vh < 430 * (1 - (gd - POOL_R - 2.2) / 8)) return BG;
+      if (vh < 350 * (1 - (gd - POOL_R - 2.2) / 8)) return BG;
       if (vh > 986) return W;
     }
     // The pilgrim path: bare trodden earth wandering in from the western

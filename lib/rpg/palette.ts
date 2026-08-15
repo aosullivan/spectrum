@@ -92,7 +92,7 @@ export const JEWEL = table(
 
 /** A cold cast over everything, with red left hot so fire still reads warm. */
 export const MOONLIT = table(
-  "06080f", "1a2a96", "ac2030", "96309e", "189678", "189cbe", "bebe96", "b0bece",
+  "06080f", "1a2a96", "ac2030", "96309e", "128a64", "189cbe", "bebe96", "b0bece",
   "0e1820", "3c58ff", "f04848", "dc5af0", "3cebb4", "60f0ff", "ecf0be", "ecf6ff",
   "0b1418", "12222a", "1a323c", "24444c", "05070e", "0b1424", "12203e", "1c305a",
 );

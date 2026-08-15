@@ -10,13 +10,15 @@ import { foliage, sprite } from "@/lib/rpg/screen";
  * curtain of trailing strands, some brushing the ground, with the trunk
  * showing through where the veil parts.
  *
- * The strands are single columns with two-column gaps — close up the canopy
- * thinning opens them into a veil of light, and at range the block vote
- * merges them into a full drooping skirt, which is exactly a far willow's
- * silhouette. No other tree in the world droops, so she reads at any size.
+ * The strands are single columns with two-column gaps — a veil drawn INTO
+ * the art, which is why this is sprite() rather than foliage(): the canopy
+ * thinning pass would open the crown too and turn the whole tree into a
+ * pergola. At range the block vote merges the strands into a full drooping
+ * skirt, which is exactly a far willow's silhouette. No other tree in the
+ * world droops, so she reads at any size.
  * (34x46)
  */
-export const TREE_WILLOW = foliage(
+export const TREE_WILLOW = sprite(
   [
     "........hhhhh.....................",
     "......hhhggghhh...................",
