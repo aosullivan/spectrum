@@ -20,15 +20,21 @@ export const CAM_HEIGHT = 26;
 /** How far behind the hero the eye sits. */
 export const CAM_BACK = 32;
 /**
- * Most a billboard may be blown up past the size it was drawn at. Held as a
- * backstop for the pathological case — your face against a stone — rather
- * than as a working limit: at four the cap bit an oak fifty-six units out,
- * which is most of the way across a clearing, and froze the whole approach.
- * The solid megaliths that motivated a cap at all are kept at arm's length
- * by their collision radius long before this, and `blitScaled` softens and
- * thins heavy magnification from 2.6x up, so there is art to look at here.
+ * Most a billboard may be blown up past the size it was drawn at.
+ *
+ * Four, and it was measured rather than guessed. Eight was tried, to let a
+ * near tree keep growing instead of holding still: it does not survive the
+ * walk in. `blitScaled` thins a canopy by punching out a quarter of its flat
+ * field, and that quarter is counted in *source* pixels — at four times life
+ * the holes are 4x4 and read as leaf texture, at eight they are 8x8 and the
+ * crown you are standing under turns to see-through speckle. Pale trunks go
+ * the same way in the other direction, spreading into flat slabs.
+ *
+ * So the ceiling stays where the art can pay for it. Raising it means first
+ * making that thinning scale-aware — gaps sized in screen pixels, not source
+ * ones — which is a change to `blitScaled`, not to this number.
  */
-const MAX_MAGNIFY = 8;
+const MAX_MAGNIFY = 4;
 
 export interface CameraState {
   x: number;
