@@ -36,6 +36,13 @@ export function RpgGame() {
     const game = new Game();
     const input = emptyInput();
 
+    // Dev escape hatch: the browser pane throttles hidden tabs and swallows
+    // scripted key events unreliably, so verification sessions teleport the
+    // camera through this handle instead of driving the arrows.
+    if (process.env.NODE_ENV === "development") {
+      (window as unknown as { __rpg?: unknown }).__rpg = { game };
+    }
+
     type HeldKey = {
       [K in keyof InputState]: InputState[K] extends boolean ? K : never;
     }[keyof InputState];

@@ -6,6 +6,112 @@ import { C, G, K, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
 import { foliage, sprite } from "@/lib/rpg/screen";
 
 /**
+ * A weeping willow for the sacred grove: a lit asymmetric crown and a
+ * curtain of trailing strands, some brushing the ground, with the trunk
+ * showing through where the veil parts.
+ *
+ * The strands are single columns with two-column gaps — a veil drawn INTO
+ * the art, which is why this is sprite() rather than foliage(): the canopy
+ * thinning pass would open the crown too and turn the whole tree into a
+ * pergola. At range the block vote merges the strands into a full drooping
+ * skirt, which is exactly a far willow's silhouette. No other tree in the
+ * world droops, so she reads at any size.
+ * (34x46)
+ */
+export const TREE_WILLOW = sprite(
+  [
+    "........hhhhh.....................",
+    "......hhhggghhh...................",
+    ".....hhgggggghhhh.gg..............",
+    "....hgggggggggghhhgggg............",
+    "...hggggkkgggggggghggggg..........",
+    "..hgggggggggkkgggggggggggg........",
+    "..hggkkgggggggggggkkggggggg.......",
+    ".hggggggggkkgggggggggggggggg......",
+    ".hgggkkggggggggkkgggggggkkggg.....",
+    ".gggggggggkkgggggggggggggggggg....",
+    "gggkkgggggggggkkgggggggggggggggg..",
+    "ggggggggkkggggggggggggkkggggggggg.",
+    "gggggggggggggggkkgggggggggggggggg.",
+    ".ggg.gggg.ggggg.gggg.ggggg.gggg.g.",
+    "..h..h..h..g...h..g..h...g..h..g..",
+    "..h..g..h..g...h..g..g...g..h..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g...g..k..g...g..g..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..k..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g...g..g..k...g..g..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g...g..g..g...g..g..g..",
+    "..g..g..g..g....gkg..g...g..g..g..",
+    "..g..g..g..g....gkg..g...g..g.....",
+    "..g..g..g..g....gk...g...g..g.....",
+    "..g..g..g..g....gk...g...g..g.....",
+    ".....g..g..g....gk...g...g..g.....",
+    ".....g..g..g....gk...g...g..g.....",
+    ".....g..g..g....gk...g...g..g.....",
+    ".....g.....g....gk...g...g..g.....",
+    ".....g.....g....gk...g......g.....",
+    ".....g.....g....gk...g......g.....",
+    ".....g.....g....gk...g......g.....",
+    ".....g.....g....gk...g......g.....",
+    "...........g....gk...g............",
+    "...........g....gk...g............",
+    "...........g....gk................",
+    "...........g...ggkg...............",
+    "...............ggkgg..............",
+    "..............gggkggg.............",
+    ".............ggggkgggg............",
+  ],
+  { g: G, h: BG, k: K },
+);
+
+/**
+ * A clump of reeds for the pool's verge, one blade arcing, one yellow
+ * flag-iris standing over the rest. Drawn six to twelve pixels tall, so
+ * the whole design is a handful of verticals and one warm dot.
+ * (13x12)
+ */
+export const REEDS = sprite(
+  [
+    ".....y.......",
+    ".....g...h...",
+    "...h.g...g...",
+    "...g.g.h.g...",
+    "...g.g.g..g..",
+    ".h.g.g.g..g..",
+    ".g.g.g.g..g.h",
+    ".g.g.g.g..g.g",
+    ".g.g.g.g..g.g",
+    ".g.g.g.g..g.g",
+    ".g.g.g.g..g.g",
+    ".ggg.ggg..ggg",
+  ],
+  { g: G, h: BG, y: BY },
+);
+
+/**
+ * Moon-pale blossoms in the grove sward. Drawn as clustered petals, not
+ * lone pixels: a single white dot loses its cell's two-colour vote to the
+ * grass and becomes grit, but a clump wins its ground.
+ * (9x5)
+ */
+export const FLOWERS = sprite(
+  [
+    ".W...y...",
+    "WWW....WW",
+    ".W..g..WW",
+    ".g..g..g.",
+    ".g..g..g.",
+  ],
+  { W: BW, y: BY, g: G },
+);
+
+/**
  * A great spreading oak of the living greenwood — broad, lobed,
  * heavy with leaf. The opposite of the moor's dead limbs.
  *
