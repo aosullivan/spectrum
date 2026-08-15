@@ -655,10 +655,11 @@ export class Game {
   }
 
   render(screen: Screen): void {
-    // Indoors the camera is in room coordinates, so a building takes the
-    // palette of the ground it stands on rather than of the origin.
+    // A room with its own light paints in its own table. Otherwise indoors
+    // the camera is in room coordinates, so a building takes the palette of
+    // the ground it stands on rather than of the origin.
     const ground = this.interior ? this.doorstep : this.cam;
-    screen.palette = paletteAt(ground.x, ground.y);
+    screen.palette = this.interior?.palette ?? paletteAt(ground.x, ground.y);
     const overlay = this.overlay();
     // The haloed actor is the one the key would act on — the same test the
     // prompt uses, so the two can never disagree about what you are near.

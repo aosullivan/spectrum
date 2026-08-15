@@ -104,5 +104,17 @@ export const EMBER_DUSK = table(
   "150d06", "221709", "31220e", "422f14", "0a0510", "180b28", "281444", "3c2060",
 );
 
+/**
+ * Torchlit stone, for interiors: slate blue-grey masonry instead of signal
+ * blue, amber fire instead of acid yellow, the ley a deep-water teal, whites
+ * gone to bone. The one palette where nothing is allowed to shout — a keep
+ * hall is all half-light, and the saturated table read as a stage set.
+ */
+export const TORCHLIT = table(
+  "07080c", "3c4c72", "b02820", "8c3898", "3c9050", "3a9eae", "d09a30", "a8a69a",
+  "141008", "6a86c0", "ff5040", "d858e8", "52d878", "7ae8f2", "ffd75e", "f2f2ee",
+  "150d06", "221709", "31220e", "422f14", "0a0510", "180b28", "281444", "3c2060",
+);
+
 /** Palette index -> [r, g, b]. The table in force when no region says otherwise. */
 export const PALETTE_RGB: PaletteTable = ULA_STANDARD;
