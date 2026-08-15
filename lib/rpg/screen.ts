@@ -1,7 +1,7 @@
 // The indexed framebuffer and its drawing verbs. 256x192 palette indices,
 // drawn back-to-front each frame, then presented to a canvas in one pass.
 
-import { K, PALETTE_RGB, T } from "@/lib/rpg/palette";
+import { K, PALETTE_RGB, T, type PaletteTable } from "@/lib/rpg/palette";
 
 export const SCREEN_W = 256;
 export const SCREEN_H = 192;
@@ -43,16 +43,6 @@ export function sprite(rows: string[], legend: Record<string, number>): Sprite {
 /** The same, for art that is foliage: see `Sprite.canopy`. */
 export function foliage(rows: string[], legend: Record<string, number>): Sprite {
   return { ...sprite(rows, legend), canopy: true };
-}
-
-/** Squared RGB distance between two palette entries. */
-function colourDistance(a: number, b: number): number {
-  const [ar, ag, ab] = PALETTE_RGB[a];
-  const [br, bg, bb] = PALETTE_RGB[b];
-  const dr = ar - br;
-  const dg = ag - bg;
-  const db = ab - bb;
-  return dr * dr + dg * dg + db * db;
 }
 
 /** Deterministic 2D hash -> 0..999. Same recipe as the concept art. */
@@ -116,12 +106,30 @@ function inFlatField(spr: Sprite, sx: number, sy: number): boolean {
 
 export class Screen {
   readonly fb = new Uint8Array(SCREEN_W * SCREEN_H);
+  /**
+   * The RGB the framebuffer's indices resolve to. Set per frame from the
+   * player's position (see regions.ts); the drawing verbs never consult it, so
+   * changing it repaints everything already drawn and nothing has to be redrawn.
+   */
+  palette: PaletteTable = PALETTE_RGB;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly image: ImageData;
+  /** Scratch histogram for the minifying blit; reused to stay allocation-free. */
+  private readonly tally = new Uint16Array(16);
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.image = ctx.createImageData(SCREEN_W, SCREEN_H);
+  }
+
+  /** Squared RGB distance between two palette entries, in the table in force. */
+  private colourDistance(a: number, b: number): number {
+    const [ar, ag, ab] = this.palette[a];
+    const [br, bg, bb] = this.palette[b];
+    const dr = ar - br;
+    const dg = ag - bg;
+    const db = ab - bb;
+    return dr * dr + dg * dg + db * db;
   }
 
   clear(colour = K): void {
@@ -187,6 +195,14 @@ export class Screen {
     const x0 = Math.round(bx - w / 2);
     const y0 = Math.round(by - h);
     const soften = w >= spr.w * SOFTEN_AT && h >= spr.h * SOFTEN_AT;
+    // The opposite end of the same problem softening answers. Shrinking hard,
+    // one source pixel per destination pixel is the wrong question to ask: a
+    // skeleton drawn from bone-wide white lines lands its samples in the gaps
+    // and disappears, and whichever pixels do survive are the ones the
+    // rounding happened to pick, so the sprite crawls as it scales. Past this
+    // ratio each destination pixel takes a vote of the block it covers, and
+    // thin work thickens into a silhouette instead of dissolving into speckle.
+    const shrunk = spr.w > w * 1.3 && spr.h > h * 1.3;
     const thin = soften && spr.canopy === true && w >= spr.w * LEAF_AT;
     const stepX = spr.w / w;
     const stepY = spr.h / h;
@@ -223,10 +239,49 @@ export class Screen {
           sx = Math.min(spr.w - 1, Math.floor(dx * stepX));
           sy = flat;
         }
-        const colour = spr.data[sy * spr.w + sx];
+        const colour = shrunk
+          ? this.vote(
+              spr,
+              sx,
+              Math.min(spr.w, Math.max(sx + 1, Math.ceil((dx + 1) * stepX))),
+              sy,
+              Math.min(spr.h, Math.max(sy + 1, Math.ceil((dy + 1) * stepY))),
+            )
+          : spr.data[sy * spr.w + sx];
         if (colour !== T) this.px(px, py, tint ?? colour);
       }
     }
+  }
+
+  /**
+   * The commonest opaque colour in a source block, or T when too little of
+   * the block is covered to be worth drawing. The coverage threshold is what
+   * decides how a shrinking sprite dies: too high and line art evaporates,
+   * too low and every distant creature bloats into the same blob.
+   */
+  private vote(spr: Sprite, x0: number, x1: number, y0: number, y1: number): number {
+    const counts = this.tally;
+    counts.fill(0);
+    let opaque = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const c = spr.data[y * spr.w + x];
+        if (c === T) continue;
+        counts[c]++;
+        opaque++;
+      }
+    }
+    const total = (x1 - x0) * (y1 - y0);
+    if (opaque * 4 < total) return T;
+    let best = T;
+    let bestCount = 0;
+    for (let c = 0; c < 16; c++) {
+      if (counts[c] > bestCount) {
+        bestCount = counts[c];
+        best = c;
+      }
+    }
+    return best;
   }
 
   /**
@@ -267,9 +322,10 @@ export class Screen {
               // Snap strays to the nearer survivor in RGB, not by the bright
               // bit: a bright-white pixel in a white-on-black cell must land
               // on white, and matching bright bits would send it to black.
-              this.fb[i] = colourDistance(colour, ink) <= colourDistance(colour, paper)
-                ? ink
-                : paper;
+              this.fb[i] =
+                this.colourDistance(colour, ink) <= this.colourDistance(colour, paper)
+                  ? ink
+                  : paper;
             }
           }
         }
@@ -281,7 +337,7 @@ export class Screen {
   present(): void {
     const out = this.image.data;
     for (let i = 0; i < this.fb.length; i++) {
-      const [r, g, b] = PALETTE_RGB[this.fb[i]];
+      const [r, g, b] = this.palette[this.fb[i]];
       const o = i * 4;
       out[o] = r;
       out[o + 1] = g;

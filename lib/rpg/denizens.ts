@@ -4,6 +4,7 @@
 
 import {
   ELF_ARCHER,
+  GHOUL,
   NPC_HERMIT,
   SPIDER,
   WATER_SPIRIT,
@@ -244,14 +245,21 @@ export const DENIZENS: Denizen[] = [
   ),
 
   // And the things that crawl.
+  //
+  // The reference art is drawn several times the size these things are ever
+  // shown at, and the skeleton is the one that cannot survive the trip down:
+  // it is bone-wide white line over black, so shrinking it to twenty pixels
+  // leaves a handful of loose dots where a creature should be. Below that it
+  // hands over to the bestiary's own small skeleton, which was drawn at the
+  // size it is displayed. The other two are solid enough to shrink.
   ...([
     { id: "gob-1", x: 210, y: 620, s: REFERENCE_GOBLIN, h: 19, p: 0.0 },
     { id: "gob-2", x: 262, y: 668, s: REFERENCE_GOBLIN, h: 18, p: 1.3 },
     { id: "gob-3", x: -180, y: 830, s: REFERENCE_GOBLIN, h: 19, p: 2.6 },
     { id: "orc-1", x: -110, y: 1030, s: REFERENCE_BRUTE, h: 26, p: 0.4 },
     { id: "orc-2", x: 120, y: 1120, s: REFERENCE_BRUTE, h: 27, p: 3.1 },
-    { id: "ghoul-1", x: 40, y: 760, s: REFERENCE_SKELETON, h: 23, p: 1.9 },
-    { id: "ghoul-2", x: -240, y: 1180, s: REFERENCE_SKELETON, h: 22, p: 0.8 },
+    { id: "ghoul-1", x: 40, y: 760, s: GHOUL, h: 23, p: 1.9, near: REFERENCE_SKELETON },
+    { id: "ghoul-2", x: -240, y: 1180, s: GHOUL, h: 22, p: 0.8, near: REFERENCE_SKELETON },
     // Spiders hunt the dead wood between the stones and the hermitage —
     // clear of both clearings, so neither place is walked into fighting.
     { id: "spider-1", x: -590, y: 620, s: SPIDER, h: 14, p: 2.2 },
@@ -268,6 +276,7 @@ export const DENIZENS: Denizen[] = [
       phase: m.p,
       hostile: true,
       sprite: m.s,
+      lod: "near" in m ? [{ minH: 34, sprite: m.near }] : undefined,
       height: m.h,
       reach: 0,
       label: "",

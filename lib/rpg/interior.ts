@@ -342,20 +342,24 @@ export function resolveInteriorMove(
  * How brightly the room's fires reach a point on the floor, 0..1. Torch
  * light is the one warm thing in a keep made of white line-work, and it is
  * what stops a chamber reading as a diagram.
+ *
+ * Pools are summed rather than maxed — two fires facing each other across a
+ * hall brighten the middle, which is the whole reason for lighting it from
+ * both sides — and the falloff is cubic. Quadratic left a quarter of full
+ * brightness still standing at half the radius, which is what turned the
+ * flags into one flat sheet of yellow instead of two pools of firelight.
  */
 function litness(interior: Interior, wx: number, wy: number): number {
-  let best = 0;
+  let total = 0;
   for (const p of interior.props) {
     if (!p.light) continue;
     const dx = wx - p.x;
     const dy = wy - p.y;
     const d = Math.sqrt(dx * dx + dy * dy);
     if (d >= p.light) continue;
-    // Quadratic falloff: a torch should make a pool, not floodlight a hall.
-    const v = (1 - d / p.light) ** 2;
-    if (v > best) best = v;
+    total += (1 - d / p.light) ** 3;
   }
-  return best;
+  return Math.min(1, total);
 }
 
 // ------------------------------------------------------------------- floor
@@ -368,7 +372,10 @@ function litness(interior: Interior, wx: number, wy: number): number {
 function floorColour(interior: Interior, wx: number, wy: number): number {
   const veinX = (interior.leyCellX + 0.5) * CELL;
   const d = Math.abs(wx - veinX);
-  if (d < 2) return BC;
+  // The core is broken along its length rather than solid: crossed at a
+  // glancing angle a solid vein turns the whole near floor into one cyan
+  // slab, which reads as a painted stripe instead of light under stone.
+  if (d < 1.6) return Math.floor(wy) % 5 === 0 ? C : BC;
   if (d < 6 && (Math.floor(wx) + Math.floor(wy)) % 2 === 0) return C;
   const jx = ((wx % CELL) + CELL) % CELL;
   const jy = ((wy % CELL) + CELL) % CELL;
@@ -385,6 +392,42 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
 function toned(x: number, y: number, level: number): boolean {
   return BAYER[(y & 3) * 4 + (x & 3)] < level * 16;
+}
+
+/**
+ * The ceiling, as beams crossing the hall.
+ *
+ * It is the same plane as the floor, mirrored above the eye, so a beam and a
+ * flagstone joint at the same depth land on rows equidistant from the
+ * horizon and the room closes. Without it the chamber has no lid: everything
+ * above the wall tops is void, and a room open to a black sky reads as a pen
+ * rather than an interior. Beams only — a full coffered grid up there would
+ * out-draw the floor, and the floor is where the player is looking.
+ */
+function drawCeiling(s: Screen, interior: Interior, cam: CameraState): void {
+  const { fx, fy } = forward(cam.yaw);
+  const { ex, ey } = eyeOf(cam);
+  const above = (interior.wallHeight ?? WALL_H) - eyeHeight(cam);
+  if (above <= 2) return;
+  for (let sy = 1; sy < HORIZON; sy++) {
+    const dist = (above * FOCAL) / (HORIZON - sy);
+    // Far beams converge into a single flickering line; let them go dark and
+    // keep the vanishing point clean.
+    if (dist > 620) continue;
+    const faint = dist > 380;
+    for (let sx = 0; sx < SCREEN_W; sx++) {
+      const lat = ((sx - 128) * dist) / FOCAL;
+      const wx = ex + fx * dist + fy * lat;
+      const wy = ey + fy * dist - fx * lat;
+      // One beam per grid cell, crossing the room's short axis, with a
+      // ridge purlin running the length of it.
+      const beam = ((wy % CELL) + CELL) % CELL < 2.2;
+      const purlin = Math.abs(((wx % CELL) + CELL) % CELL - CELL / 2) < 1.1;
+      if (!beam && !purlin) continue;
+      if (faint && (sx + sy) % 2 !== 0) continue;
+      s.fb[sy * SCREEN_W + sx] = beam ? W : C;
+    }
+  }
 }
 
 function drawFloor(s: Screen, interior: Interior, cam: CameraState): void {
@@ -572,12 +615,12 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
       end++;
     }
 
-    // The palette has exactly two whites, so the line-work's brightness can
-    // encode ONE thing, and distance is the one worth having: the near walls
-    // of a chamber come forward and the far ones sit back, which is the only
-    // depth cue left once every face is the same black.
     const mid = hits[(x + end) >> 1] ?? face;
-    const line = mid.z < 200 ? BW : W;
+    // The two whites are the only value steps there are, and they are spent
+    // on the one distinction worth having: near faces come forward, far ones
+    // sit back. Faces square to the plan's two axes take different ones so
+    // that a corner reads as a corner rather than as a line on a flat hole.
+    const line = mid.z < 200 && face.side === 0 ? BW : W;
 
     for (let cx = x; cx <= end; cx++) {
       const col = hits[cx];
@@ -693,37 +736,84 @@ function drawKeepStairs(
   const farY = 8.18 * CELL;
   const halfWidth = 23;
   const count = 10;
-  let previousLeft: ProjectedPoint | null = null;
-  let previousRight: ProjectedPoint | null = null;
-  for (let i = 0; i <= count; i++) {
+  const rise = 68;
+  // Nothing sensible can be drawn from inside the flight: every tread in
+  // front of the eye projects wider than the screen and fills the chamber
+  // with its own risers. Standing level with the foot of the stair is as
+  // close as the drawing goes.
+  //
+  // The test follows the plan's bearing, and the plans were reversed so the
+  // way out is south and the compass stops lying in the doorway. She now
+  // comes at the flight from BELOW its foot in y, not above it.
+  const { ey } = eyeOf(cam);
+  if (ey > nearY) return;
+  // Each step is a tread and the riser under it, both filled solid before
+  // their edges go on. A bright line per step with the chamber showing
+  // between them reads as a ladder hung in the air; what makes it a stair is
+  // the dark face beneath every tread.
+  for (let i = 0; i < count; i++) {
     const p = i / count;
-    const y = nearY + (farY - nearY) * p;
-    const h = p * 68;
-    const left = projectPoint(cam, centreX - halfWidth, y, h);
-    const right = projectPoint(cam, centreX + halfWidth, y, h);
-    drawDepthLine(s, depth, left, right, i % 2 === 0 ? BW : W);
-    if (i > 0) {
-      drawDepthLine(s, depth, previousLeft, left, W);
-      drawDepthLine(s, depth, previousRight, right, W);
+    const q = (i + 1) / count;
+    const treadY = nearY + (farY - nearY) * p;
+    const backY = nearY + (farY - nearY) * q;
+    const low = p * rise;
+    const high = q * rise;
+    const tread = [
+      projectPoint(cam, centreX - halfWidth, treadY, low),
+      projectPoint(cam, centreX + halfWidth, treadY, low),
+      projectPoint(cam, centreX + halfWidth, backY, low),
+      projectPoint(cam, centreX - halfWidth, backY, low),
+    ];
+    const riser = [
+      projectPoint(cam, centreX - halfWidth, backY, low),
+      projectPoint(cam, centreX + halfWidth, backY, low),
+      projectPoint(cam, centreX + halfWidth, backY, high),
+      projectPoint(cam, centreX - halfWidth, backY, high),
+    ];
+    if (tread.some((c) => c === null)) continue;
+    fillQuad(s, depth, tread as ProjectedPoint[], K);
+    if (riser.every((c) => c !== null)) {
+      fillQuad(s, depth, riser as ProjectedPoint[], K);
+      drawDepthLine(s, depth, riser[3], riser[2], i % 2 === 0 ? BW : W);
     }
-    previousLeft = left;
-    previousRight = right;
+    // Nosing, and the stringers running up the flanks of the flight.
+    drawDepthLine(s, depth, tread[0], tread[1], W);
+    drawDepthLine(s, depth, tread[0], tread[3], W);
+    drawDepthLine(s, depth, tread[1], tread[2], W);
   }
-  const railHeight = 13;
-  drawDepthLine(
-    s,
-    depth,
-    projectPoint(cam, centreX - halfWidth, nearY, railHeight),
-    projectPoint(cam, centreX - halfWidth, farY, 68 + railHeight),
-    BC,
-  );
-  drawDepthLine(
-    s,
-    depth,
-    projectPoint(cam, centreX + halfWidth, nearY, railHeight),
-    projectPoint(cam, centreX + halfWidth, farY, 68 + railHeight),
-    BC,
-  );
+}
+
+/** Fill a convex projected quad, honouring the wall depth buffer. */
+function fillQuad(
+  s: Screen,
+  depth: Float32Array,
+  quad: readonly ProjectedPoint[],
+  colour: number,
+): void {
+  const top = Math.max(0, Math.floor(Math.min(...quad.map((p) => p.y))));
+  const bottom = Math.min(HUD_TOP - 1, Math.ceil(Math.max(...quad.map((p) => p.y))));
+  const z = quad.reduce((a, p) => a + p.z, 0) / quad.length;
+  for (let y = top; y <= bottom; y++) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < quad.length; i++) {
+      const a = quad[i];
+      const b = quad[(i + 1) % quad.length];
+      if (a.y === b.y) continue;
+      const t = (y - a.y) / (b.y - a.y);
+      if (t < 0 || t > 1) continue;
+      const x = a.x + (b.x - a.x) * t;
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+    if (lo > hi) continue;
+    const x0 = Math.max(0, Math.round(lo));
+    const x1 = Math.min(SCREEN_W - 1, Math.round(hi));
+    for (let x = x0; x <= x1; x++) {
+      if (depth[x] + 1 < z) continue;
+      s.fb[y * SCREEN_W + x] = colour;
+    }
+  }
 }
 
 // ------------------------------------------------------------------- frame
@@ -737,7 +827,8 @@ export function renderInterior(
   visibleActors: readonly Billboard[] = interior.actors,
 ): void {
   s.clear();
-  // A few motes of dust in the dark above, so the ceiling is not dead space.
+  drawCeiling(s, interior, cam);
+  // A few motes of dust hanging in the dark between the beams.
   for (let y = 4; y < HORIZON - 6; y += 5) {
     for (let x = 6; x < SCREEN_W; x += 11) {
       if (hash(x, y + 31) < 22) s.px(x, y, W);

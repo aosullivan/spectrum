@@ -81,7 +81,7 @@ export const GROVE_R = 190;
 export const DEAD_WOOD_X = -260;
 const WOODS_EDGE_X = DEAD_WOOD_X;
 export const GREENWOOD_X = 260;
-const GREENWOOD_EDGE_X = GREENWOOD_X;
+export const GREENWOOD_EDGE_X = GREENWOOD_X;
 /** The henge stands deep in the greenwood. */
 export const HENGE_POS = { x: 840, y: 980 };
 const HENGE_R = 210;
@@ -192,9 +192,24 @@ export function groundColour(
   const ax = Math.abs(wx);
   if (wy < KEEP_POS.y) {
     const core = Math.max(1.6, footprint * 0.7);
-    if (ax < core) return footprint > 3 || (iy & 7) < 3 ? BC : C;
+    // Broken along its length near to hand. Walk along the vein rather than
+    // across it and a solid core lies over the whole near floor as one flat
+    // cyan slab; dashed, it reads as light coming up through the turf.
+    if (ax < core) {
+      if (footprint > 3) return BC;
+      // Broken irregularly, not on a modulo: a strict repeat up the middle
+      // of the screen reads as a chain or a ladder rather than as light.
+      if (hash(ix, iy) > 660) return K;
+      return (iy & 3) === 0 ? BC : C;
+    }
     if (ax < core + 3.4) return (ix + iy) % 2 === 0 ? C : K;
     if (ax < core + 6.4) return hash(ix, iy) < 140 ? C : K;
+    // And a wide, thinning spill either side: the ley is the one light source
+    // on the moor, so the ground near it should know about it. Sparse enough
+    // that it never competes with the core it is cast from.
+    if (ax < core + 30 && hash(ix, iy + 77) < 120 * (1 - (ax - core - 6.4) / 24)) {
+      return C;
+    }
   }
 
   // --- the mat: two octaves of noise dithered into a ramp ---
@@ -262,6 +277,8 @@ export interface Feature {
   x: number;
   y: number;
   sprite: Sprite;
+  /** Body radius in world units. Omitted features can be walked through. */
+  solid?: number;
   /** World height in units; width follows the sprite's aspect. */
   height: number;
   /** Landmarks stay visible (min on-screen scale) at any distance. */
@@ -433,7 +450,10 @@ const PLACED: Feature[] = [
   },
 
   // The henge: five trilithons in a ring, each far taller than the mage,
-  // with outliers fallen around them.
+  // with outliers fallen around them. These are the one place in the world
+  // you can put your face against a rock, so they are solid: walking through
+  // a megalith is bad enough on its own, and it also puts the eye inside a
+  // sprite, where even a capped billboard is a wall of grey.
   ...[0, 1, 2, 3, 4].map((i) => {
     const a = (i / 5) * Math.PI * 2 + 0.3;
     return {
@@ -442,6 +462,7 @@ const PLACED: Feature[] = [
       sprite: TRILITHON,
       height: 112,
       landmark: true,
+      solid: 30,
     };
   }),
   ...[0, 1, 2, 3, 4, 5].map((i) => {
@@ -451,6 +472,7 @@ const PLACED: Feature[] = [
       y: HENGE_POS.y + Math.cos(a) * 250,
       sprite: i % 3 === 0 ? SARSEN_FALLEN : SARSEN_TALL,
       height: i % 3 === 0 ? 26 : 84,
+      solid: i % 3 === 0 ? 26 : 14,
     };
   }),
 
@@ -594,12 +616,21 @@ export function resolveMove(
   toX: number,
   toY: number,
 ): { x: number; y: number } {
+  // Only the handful of authored megaliths are solid; the scattered woodland
+  // stays walk-through, or the greenwood becomes a maze of invisible posts.
+  const stones = PLACED.filter((f) => f.solid !== undefined);
   const blocked = (x: number, y: number) =>
     WORLD_COLLIDERS.some(
       (box) =>
         Math.abs(x - box.x) < box.w / 2 + OUTDOOR_BODY_R &&
         Math.abs(y - box.y) < box.d / 2 + OUTDOOR_BODY_R,
-    );
+    ) ||
+    stones.some((f) => {
+      const dx = x - f.x;
+      const dy = y - f.y;
+      const reach = (f.solid ?? 0) + OUTDOOR_BODY_R;
+      return dx * dx + dy * dy < reach * reach;
+    });
   if (!blocked(toX, toY)) return { x: toX, y: toY };
   if (!blocked(toX, fromY)) return { x: toX, y: fromY };
   if (!blocked(fromX, toY)) return { x: fromX, y: toY };
