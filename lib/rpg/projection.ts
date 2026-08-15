@@ -2,6 +2,7 @@
 // that is what makes gliding through the keep gate feel continuous rather
 // than like two different games stitched together.
 
+import { LOOK } from "@/lib/rpg/look";
 import { BC, BG, BR, BW, BY, C, K } from "@/lib/rpg/palette";
 import {
   HORIZON,
@@ -259,7 +260,26 @@ export function collectBillboards(
     //
     // Landmarks never dissolve: they already swap to low-detail LOD art at
     // range, and a dithered castle reads as noise instead of a destination.
-    const dither = it.landmark ? 0 : it.z > 900 ? 2 : it.z > 420 ? 1 : 0;
+    //
+    // With shades on, that distance is spent in value instead: a far tree
+    // steps down the leaf ramp, a far sarsen down the stone ramp, and only
+    // the last band still thins, so the horizon has air in it without the
+    // near-middle distance being eaten into holes. This is the aerial
+    // perspective the black-paper rule allows — light taken away, never pale
+    // haze laid on, which on unlit glass would bring the far field forward.
+    const band = it.z > 1500 ? 3 : it.z > 900 ? 2 : it.z > 420 ? 1 : 0;
+    const dither = it.landmark
+      ? 0
+      : LOOK.shades
+        ? band > 2
+          ? 1
+          : 0
+        : it.z > 900
+          ? 2
+          : it.z > 420
+            ? 1
+            : 0;
+    const shade = LOOK.shades && !it.landmark ? band : 0;
     return {
       z: it.z,
       paint: (s: Screen) => {
@@ -292,7 +312,18 @@ export function collectBillboards(
         if (it.highlight) {
           drawHalo(s, it.sprite, it.screenX, footY, w, it.h, depth, it.z);
         }
-        s.blitScaled(it.sprite, it.screenX, footY, w, it.h, dither, undefined, depth, it.z);
+        s.blitScaled(
+          it.sprite,
+          it.screenX,
+          footY,
+          w,
+          it.h,
+          dither,
+          undefined,
+          depth,
+          it.z,
+          shade,
+        );
         if (it.energy !== undefined) {
           drawEnergyBar(s, it.screenX, footY - it.h - 5, w, it.energy);
         }
