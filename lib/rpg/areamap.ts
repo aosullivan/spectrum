@@ -15,7 +15,13 @@
 // only place in the game with the room to draw them, and the Seer sends you
 // looking for a key in the east alcove.
 
-import { drawText, drawWindow, headingOf } from "@/lib/rpg/panel";
+import {
+  drawText,
+  drawWindow,
+  headingOf,
+  MARK_INK,
+  type MarkKind,
+} from "@/lib/rpg/panel";
 import { textWidth } from "@/lib/rpg/assets";
 import { B, BC, BG, BM, BR, BW, BY, C, G, K, W, Y } from "@/lib/rpg/palette";
 import { SCREEN_H, SCREEN_W, type Screen } from "@/lib/rpg/screen";
@@ -95,7 +101,7 @@ const EDGE = {
 };
 
 /** What a mark on the map stands for. Places are drawn separately. */
-export type MarkKind = "foe" | "friend" | "item" | "way";
+export type { MarkKind };
 
 export interface MapMark {
   x: number;
@@ -122,13 +128,6 @@ export interface MapState {
   /** Set indoors. Absent outdoors, when the chart is drawn instead. */
   plan?: RoomPlan;
 }
-
-const MARK_INK: Record<MarkKind, number> = {
-  foe: BR,
-  friend: BC,
-  item: BY,
-  way: BG,
-};
 
 /** A tower glyph for a built place; a ring of stones for the old ones. */
 function drawPlaceMark(s: Screen, px: number, py: number, built: boolean): void {
