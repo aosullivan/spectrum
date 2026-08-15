@@ -138,17 +138,49 @@ function drawSky(s: Screen, yaw: number, dead: boolean): void {
   }
   // Stars, anchored to azimuth so they wheel as you turn, and denser in a
   // band across the sky — a night this dark should have a milky way in it.
-  for (let y = 2; y < HORIZON - 3; y += 3) {
-    for (let x = 0; x < SCREEN_W; x += 7) {
+  // The night look deepens the field: a finer grid, three magnitudes with
+  // the faintest in blue, a dust of blue grain along the band, and the odd
+  // great star drawn as a cross — the one light in the sky you could name.
+  const rich = LOOK.night !== "off";
+  const stepX = rich ? 5 : 7;
+  for (let y = 2; y < HORIZON - 3; y += rich ? 2 : 3) {
+    for (let x = 0; x < SCREEN_W; x += stepX) {
       const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
-      const h = hash(wx - (wx % 7), y);
+      const h = hash(wx - (wx % stepX), y);
       // The band runs at a slant, so turning sweeps along it.
       const band = Math.abs(y - (14 + Math.sin((wx / SKY_PERIOD) * Math.PI * 2) * 13));
-      const threshold = band < 9 ? 210 - band * 14 : 62;
-      if (h >= threshold) continue;
+      const ceiling = HORIZON - 1 - Math.max(far[x] ?? 0, near[x] ?? 0);
+      const threshold = rich
+        ? band < 11
+          ? 250 - band * 16
+          : 74
+        : band < 9
+          ? 210 - band * 14
+          : 62;
+      if (h >= threshold) {
+        // Stars too faint to resolve: a grain of blue dust in the band.
+        if (rich && band < 10 && hash(wx, y * 13 + 5) < 76 - band * 7) {
+          const dy = y + ((h >> 2) % 2);
+          if (dy <= ceiling) s.px(x + (h % stepX), dy, B);
+        }
+        continue;
+      }
       const py = y + ((h >> 3) % 3);
-      if (py > HORIZON - 1 - Math.max(far[x] ?? 0, near[x] ?? 0)) continue;
-      s.px(x + (h % 5), py, h % 9 === 0 ? BW : W);
+      if (py > ceiling) continue;
+      const px = x + (h % 5);
+      if (!rich) {
+        s.px(px, py, h % 9 === 0 ? BW : W);
+        continue;
+      }
+      s.px(px, py, h % 29 === 0 ? BW : h % 3 === 0 ? W : B);
+      if (h === 0 && py > 2 && py < ceiling - 2) {
+        // A great star: bright heart, four faint points.
+        s.px(px - 1, py, W);
+        s.px(px + 1, py, W);
+        s.px(px, py - 1, W);
+        s.px(px, py + 1, W);
+        s.px(px, py, BW);
+      }
     }
   }
   // The moon holds its bearing in the sky.

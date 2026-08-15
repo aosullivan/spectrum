@@ -17,7 +17,9 @@ but runs on a modern TypeScript engine at 60fps.
    (palette 16–23) — background art limited to 2 colours per 8×1 attribute strip
    (the Timex hi-colour fiction), presented through subtle CRT glass by default
    (toggleable). Amended from 8×8 cells / 15 colours flat with the Dusk look, then
-   to the Relief look (ramps + rolling heightfield + CRT), both 2026-08-15. But the
+   to the Relief look (ramps + rolling heightfield + CRT), then to the moonlit
+   night key (navy sky-row values, three-magnitude starfield, all-soil ground
+   mat), all 2026-08-15. But the
    engine is modern TS — unlimited memory, smooth 60fps, real floating-point math.
    The Z80 emulator elsewhere in this repo is not involved.
 2. **Open world, honestly.** Free roaming in every direction is a first-class promise.
@@ -29,7 +31,7 @@ but runs on a modern TypeScript engine at 60fps.
 | Branch | Decision |
 |---|---|
 | Runtime | Modern TS engine; Spectrum display lens. Emulator untouched. |
-| Look | **"Leyline — Relief"** (adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day): a shaded ULAplus world — gradient night sky, mottled tonal ground, lit leyline verge — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Flags in `lib/rpg/look.ts`; Dusk and the original void-black look survive as presets. |
+| Look | **"Leyline — Relief"** (adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day): a shaded ULAplus world — gradient night sky, mottled tonal ground, lit leyline verge — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Amended again 2026-08-15 (the night-key round, held against the graveyard concept frame): the sky rows carry a just-visible navy night gradient under a deep azimuth-anchored starfield, and the ground mat shades through soil tones only — bright green ink marks growth, never ground. Flags in `lib/rpg/look.ts` (`night` dial); Relief, Dusk and the original void-black look survive as presets. |
 | Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Terrain-only palette rows: index 8 earth tone, 16–19 ground ramp, 20–23 sky ramp (black stays black for water and sprite work). Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
 | Camera | Smooth Mode-7-style rotation; hero at your back; the attribute grid stays fixed to the "glass" while the world turns beneath it. |
 | World | Open biomes (woods, plains, moor) + enterable sites (castles, towers, barrow dungeons). Interiors use the same perspective camera with walls closing in. |

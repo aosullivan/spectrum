@@ -104,5 +104,46 @@ export const EMBER_DUSK = table(
   "150d06", "221709", "31220e", "422f14", "0a0510", "180b28", "281444", "3c2060",
 );
 
+// --------------------------------------------------------------- night key
+//
+// The `night` look lifts the sky rows (20..23) from near-black to a
+// just-visible navy: night air instead of void. Swapping values under fixed
+// indices is exactly what a real ULAplus palette reload did, so the fiction
+// holds, and keeping it a runtime swap keeps every older preset bit-for-bit
+// when the dial is off. Each entry pairs a table with its night rows, zenith
+// to horizon, in the table's own cast — cold navy on the moor, softened in
+// the greenwood, warmed toward violet in the ember west.
+
+const NIGHT_SKY: ReadonlyArray<[PaletteTable, PaletteTable]> = [
+  [ULA_STANDARD, table("0a1430", "132242", "1c3058", "24386a")],
+  [PAL_TELEVISION, table("0c1428", "141f3a", "1c2c50", "263862")],
+  [DEEP_CONTRAST, table("0a1226", "101c3a", "182a52", "22386a")],
+  [JEWEL, table("0a1230", "121f44", "1a2d5e", "243c78")],
+  [MOONLIT, table("0c1626", "14223c", "1c3054", "263e66")],
+  [EMBER_DUSK, table("140b26", "22123c", "321c54", "46286c")],
+];
+
+/** The tables' own sky rows, copied before any swap so off restores exactly. */
+const DAY_SKY: ReadonlyArray<PaletteTable> = NIGHT_SKY.map(([t]) =>
+  t.slice(RAMP_S0, RAMP_S0 + 4).map((c) => [...c] as const),
+);
+
+let nightApplied = false;
+
+/** Write the day or night sky rows into every table, in place. */
+export function applyNightSky(on: boolean): void {
+  if (on === nightApplied) return;
+  nightApplied = on;
+  NIGHT_SKY.forEach(([into, night], i) => {
+    const rows = on ? night : DAY_SKY[i];
+    for (let r = 0; r < 4; r++) {
+      const dst = into[RAMP_S0 + r] as unknown as [number, number, number];
+      dst[0] = rows[r][0];
+      dst[1] = rows[r][1];
+      dst[2] = rows[r][2];
+    }
+  });
+}
+
 /** Palette index -> [r, g, b]. The table in force when no region says otherwise. */
 export const PALETTE_RGB: PaletteTable = ULA_STANDARD;

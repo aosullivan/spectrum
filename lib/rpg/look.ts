@@ -1,8 +1,9 @@
 // The look flags. The renderer consults this mutable singleton so aesthetic
 // variants can be toggled per frame — from a grab script or a debug key —
-// without forking the drawing code. The defaults are the Relief look the
-// user adopted on 2026-08-15 (superseding Dusk, adopted earlier the same
-// day); the older looks survive as presets for A/B.
+// without forking the drawing code. The defaults are the moonlit night key
+// over Relief, adopted 2026-08-15 from the graveyard-concept round
+// (superseding bare Relief and Dusk, both adopted earlier the same day);
+// the older looks survive as presets for A/B.
 //
 // Two dials from the first prototype round — undergrowth cover and the
 // banded distance fade — retired in the merge with main's dither-shading
@@ -15,6 +16,17 @@
  * still attribute-shaped); "off" drops the clash entirely.
  */
 export type AttributeMode = "8x8" | "8x1" | "off";
+
+/**
+ * The night key (2026-08 round, from the graveyard concept frame): how much
+ * of the frame's brightness the ground is allowed to keep at night.
+ * "sky" lifts the zenith to a just-visible navy and fills in the starfield
+ * but leaves the ground alone; "meadow" additionally walks the ground ramp
+ * through the lit-soil step so bright green ink survives only at tuft
+ * crests; "moonlit" removes ink green from the mat entirely — the field is
+ * all soil tones, and green belongs to things that grow, not the ground.
+ */
+export type NightMode = "off" | "sky" | "meadow" | "moonlit";
 
 export interface Look {
   /** Bare ground floors at a deep earth tone (palette index 8), not black. */
@@ -30,6 +42,7 @@ export interface Look {
   ramps: boolean;
   /** Rolling value-noise relief; ridges occlude and stand against the sky. */
   hills: boolean;
+  night: NightMode;
 }
 
 /** The look as first shipped: void-black moor and the 8x8 clash. */
@@ -39,6 +52,7 @@ const CLASSIC: Look = {
   attribute: "8x8",
   ramps: false,
   hills: false,
+  night: "off",
 };
 
 /** Earth-floored ground, horizon glow, 8x1 weave. */
@@ -48,12 +62,19 @@ const DUSK: Look = {
   attribute: "8x1",
   ramps: false,
   hills: false,
+  night: "off",
 };
 
 /** Dusk under ULAplus value ramps, standing on the rolling heightfield. */
 const RELIEF: Look = { ...DUSK, ramps: true, hills: true };
 
-export const LOOK: Look = { ...RELIEF };
+/**
+ * Relief under the moonlit night key: navy zenith, deep starfield, all-soil
+ * mat — green ink marks growth, light marks light, the ground keeps neither.
+ */
+const MOONLIT_NIGHT: Look = { ...RELIEF, night: "moonlit" };
+
+export const LOOK: Look = { ...MOONLIT_NIGHT };
 
 export function setLook(look: Partial<Look>): void {
   Object.assign(LOOK, look);
@@ -73,4 +94,7 @@ export const LOOK_PRESETS: Record<string, Look> = {
   dusk: { ...DUSK },
   ramps: { ...DUSK, ramps: true },
   relief: { ...RELIEF },
+  nightsky: { ...RELIEF, night: "sky" },
+  nightmeadow: { ...RELIEF, night: "meadow" },
+  nightmoonlit: { ...MOONLIT_NIGHT },
 };

@@ -112,10 +112,32 @@ const GROUND_RAMP_ULAPLUS: Ramp = [
   G,
   BG,
 ];
+// The night-key ramps (see look.ts). The ULAplus ramp above skips the
+// table's lit-soil step and jumps from moss to full green ink, which is why
+// the near field can go neon. "meadow" walks through that step so bright
+// green survives only at the crests; "moonlit" ends on it — the mat is all
+// soil, and ink green is left to the things that grow out of it.
+const GROUND_RAMP_NIGHT_MEADOW: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 1,
+  RAMP_G0 + 2,
+  RAMP_G0 + 3,
+  G,
+];
+const GROUND_RAMP_NIGHT_MOONLIT: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 1,
+  RAMP_G0 + 2,
+  RAMP_G0 + 3,
+];
 
 /** The ground ramp the current look shades through. */
 export function groundRamp(): Ramp {
-  if (LOOK.ramps) return GROUND_RAMP_ULAPLUS;
+  if (LOOK.ramps) {
+    if (LOOK.night === "meadow") return GROUND_RAMP_NIGHT_MEADOW;
+    if (LOOK.night === "moonlit") return GROUND_RAMP_NIGHT_MOONLIT;
+    return GROUND_RAMP_ULAPLUS;
+  }
   return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
 }
 
