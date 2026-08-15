@@ -45,6 +45,27 @@ export function foliage(rows: string[], legend: Record<string, number>): Sprite 
   return { ...sprite(rows, legend), canopy: true };
 }
 
+const flipCache = new WeakMap<Sprite, Sprite>();
+
+/**
+ * The sprite upside down, for reflections in still water. Cached per sprite:
+ * reflections are drawn every frame and the art never changes.
+ */
+export function flippedV(spr: Sprite): Sprite {
+  const hit = flipCache.get(spr);
+  if (hit) return hit;
+  const data = new Uint8Array(spr.w * spr.h);
+  for (let y = 0; y < spr.h; y++) {
+    data.set(
+      spr.data.subarray(y * spr.w, (y + 1) * spr.w),
+      (spr.h - 1 - y) * spr.w,
+    );
+  }
+  const out: Sprite = { w: spr.w, h: spr.h, data, canopy: spr.canopy };
+  flipCache.set(spr, out);
+  return out;
+}
+
 /** Deterministic 2D hash -> 0..999. Same recipe as the concept art. */
 export function hash(x: number, y: number): number {
   let h = (x * 374761393 + y * 668265263) | 0;
