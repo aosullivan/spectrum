@@ -6,7 +6,7 @@ import type { Billboard } from "@/lib/rpg/projection";
 import { sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 
-export const VILLAGE_POS = { x: 420, y: 1080 } as const;
+export const VILLAGE_POS = { x: 430, y: 1100 } as const;
 
 function roof(
   x: number,

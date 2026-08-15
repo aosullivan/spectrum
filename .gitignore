@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Prototyping screenshots — regenerate with the gallery harness, do not commit
 /images/
+
+# Headless render output from /api/look-shot — regenerate, do not commit
+/screenshots/look-*.png

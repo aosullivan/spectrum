@@ -35,6 +35,8 @@ import { collectFaces } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import {
   DEAD_WOOD_X,
+  HERMITAGE_BOXES,
+  HERMITAGE_POS,
   KEEP_BOXES,
   KEEP_GATE_Y,
   KEEP_POS,
@@ -497,6 +499,10 @@ export function renderFrame(
   );
   const keepDistance = Math.hypot(cam.x - KEEP_POS.x, cam.y - KEEP_GATE_Y);
   const villageDistance = Math.hypot(cam.x - VILLAGE_POS.x, cam.y - VILLAGE_POS.y);
+  const hermitageDistance = Math.hypot(
+    cam.x - HERMITAGE_POS.x,
+    cam.y - HERMITAGE_POS.y,
+  );
   const distantKeep: Billboard[] =
     !omit?.has("keep") && keepDistance > 800
       ? [{
@@ -515,6 +521,7 @@ export function renderFrame(
   const jobs = [
     ...(omit?.has("keep") || keepDistance > 800 ? [] : collectFaces(cam, KEEP_BOXES)),
     ...(villageDistance > 850 ? [] : collectFaces(cam, VILLAGE_BOXES)),
+    ...(hermitageDistance > 700 ? [] : collectFaces(cam, HERMITAGE_BOXES)),
     ...collectBillboards(cam, [...distantKeep, ...features, ...entities], t),
   ];
   jobs.sort((a, b) => b.z - a.z);
