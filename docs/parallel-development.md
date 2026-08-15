@@ -32,69 +32,86 @@ inside the last minute you cannot account for, means a live second writer.
 
 ## Setting up an isolated worktree
 
-**Commit first.** A worktree only carries committed content. If the work you
-care about is untracked, the new worktree will be empty of it.
+One command does the whole thing:
 
 ```bash
-git add -A && git commit -m "Checkpoint before branching"
+npm run worktree new <feature>
 ```
 
-Create the worktree from your **local** HEAD, not from `origin`:
+It creates `../spectrum-<feature>` on a new branch, copies `node_modules`
+across, and prints the port that worktree owns. Three details it handles that
+are easy to get wrong by hand:
 
-```bash
-git worktree add /Users/you/spectrum-<feature> -b <feature>
+- **It refuses to run with a dirty tree.** A worktree only carries committed
+  content, so uncommitted work would simply not be there — which looks
+  exactly like having lost it. Commit or stash, then run it again.
+- **It branches from local `HEAD`, not `origin`.** `EnterWorktree` defaults to
+  branching from `origin/<default-branch>`, which on this repo is well behind
+  local `main`. To enter a worktree made this way, pass the path:
+  `EnterWorktree({ path: "/Users/you/spectrum-<feature>" })`.
+- **It clones `node_modules` rather than reinstalling it.** `cp -Rc` is an APFS
+  clone: the 584 MB is shared with this checkout copy-on-write, so it takes
+  about four seconds and almost no disk. It falls back to `npm install` on a
+  filesystem that cannot clone.
+
+Existing worktrees, including ones `EnterWorktree` made under
+`.claude/worktrees/`, work the same way once they carry this `scripts/`
+directory. `npm run worktree ls` shows all of them with their ports.
+
+## Running a dev server per worktree
+
+`npm run dev` gives each worktree its own port automatically. The main
+checkout keeps 3000; every other worktree claims one from 3001 upward the
+first time it starts, and keeps it after that, so its URL is stable:
+
+```
+rpg-verticality → http://localhost:3004
+  /Users/you/spectrum-verticality
+  preview_start({ url: "http://localhost:3004" })
 ```
 
-`EnterWorktree` defaults to branching from `origin/<default-branch>`, which
-on this repo is well behind local `main`. Creating it yourself with
-`git worktree add` and then entering it by path keeps your actual work:
+The claims live in `dev-ports.json` inside the **shared** git directory —
+`git rev-parse --git-common-dir` resolves to the same path from every
+worktree, which is what lets them agree without a daemon. Ports are released
+automatically when a worktree is removed. `npm run worktree ls` prints the
+table, `npm run dev -- --new-port` forces a fresh claim.
 
-```
-EnterWorktree({ path: "/Users/you/spectrum-<feature>" })
-```
-
-Install dependencies in the worktree. `node_modules` is not tracked, so it
-does not come along:
-
-```bash
-cd /Users/you/spectrum-<feature> && npm install
-```
-
-## Running both dev servers
-
-Next stores its dev lock at `<distDir>/lock` — that is, `.next/dev/lock`
-inside whichever directory it resolves as the project. Two servers that
-resolve to the same project directory will refuse to run together:
+The port is only half of it. Next stores its dev lock at `.next/dev/lock`
+inside whichever directory it resolves as the *project*, so two servers that
+resolve to the same project directory refuse to run together:
 
 ```
 ⨯ Another next dev server is already running.
 ```
 
-The lock is held by whichever server got there first; `lsof -p <pid> | grep lock`
-names the exact file.
+`scripts/dev.mjs` resolves the project from `import.meta.dirname` — its own
+location on disk — and passes that to `next dev` as an explicit directory
+argument. Each worktree therefore gets its own `.next`, its own lock and its
+own port, regardless of which directory the launcher was invoked from.
 
-The fix is simply that the second server must be **started with its working
-directory set to the worktree**. Then it gets its own `.next`, its own lock,
-and its own port:
+### The preview tool: attach, do not launch
+
+`preview_start({ name: "studio" })` launches the command from the session's
+**original** project root. From a worktree session it therefore serves the
+main checkout while looking like it serves the worktree — a worse failure
+than an error, because nothing complains.
+
+Start the server yourself and attach the browser to the URL instead:
 
 ```bash
-cd /Users/you/spectrum-<feature> && npm run dev -- --port 3100
+npm run dev
 ```
 
-Both servers then coexist: `localhost:3000` for the main checkout,
-`localhost:3100` for the worktree.
+```
+preview_start({ url: "http://localhost:3004" })
+```
 
-### Known limitation: the preview tool cannot do this
+`preview_start` with a `url` and no `name` opens a browser tab against an
+already-running server, which is all a worktree session needs. `npm run dev`
+prints the exact call to paste.
 
-`preview_start` launches the command from the session's **original** project
-root, not from the worktree, whatever `.claude/launch.json` in the worktree
-says. It therefore resolves to the main checkout's `.next`, grabs that lock,
-and fails. An agent working in a worktree cannot drive its own preview
-server; ask the human to run the command above in a terminal, and verify
-headlessly in the meantime (see below).
-
-Do not "fix" this by killing the other session's dev server. It belongs to
-work in progress that is not yours.
+Do not "fix" a port conflict by killing the other session's dev server. It
+belongs to work in progress that is not yours.
 
 ## Verifying without a browser
 
@@ -132,8 +149,8 @@ git merge <feature>
 Conflicts here are normal and resolvable, which is the entire point — the
 alternative was two agents silently overwriting each other with no record.
 
-Remove the worktree when you are done:
+Remove the worktree when you are done. This also releases its port:
 
 ```bash
-git worktree remove /Users/you/spectrum-<feature>
+npm run worktree rm <feature>
 ```

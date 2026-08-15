@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
+    "worktree": "node scripts/worktree.mjs",
     "build": "next build",
     "build:rpg-art": "node scripts/build-rpg-pixel-art.mjs",
     "start": "next start",
