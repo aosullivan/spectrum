@@ -50,6 +50,7 @@ import {
   GATE,
   GROVE_POS,
   HENGE_POS,
+  HERMITAGE_POS,
   KEEP_POS,
   VILLAGE_POS,
   DEAD_WOOD_X,
@@ -544,6 +545,7 @@ export class Game {
     if (near(HENGE_POS, 260)) return "THE HENGE";
     if (near(GROVE_POS, 210)) return "THE GROVE";
     if (near(CIRCLE_POS, 160)) return "STONE CIRCLE";
+    if (near(HERMITAGE_POS, 170)) return "THE HERMITAGE";
     if (this.cam.x < DEAD_WOOD_X) return "ANCIENT WOODS";
     return "THE MOOR";
   }
