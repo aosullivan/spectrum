@@ -146,27 +146,78 @@ const GROUND_RAMP_SHADED: Ramp = Array.from(
   { length: RAMP_G_N },
   (_, i) => RAMP_G0 + i,
 );
+// The night-key ladders (see look.ts), one per resolution. The day ladders
+// climb from soil into green ink, which is why the near field could go
+// neon; at night the mat ends in soil — "moonlit" is the authored soil
+// span alone (its adopted coarse form was the four anchors; under shades,
+// the same span sampled twice as finely), and "meadow" keeps one green
+// step so bright ink survives only at the tuft crests. Green marks growth,
+// never ground.
+const GROUND_RAMP_NIGHT_MEADOW: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 2,
+  RAMP_G0 + 4,
+  RAMP_G0 + 6,
+  G,
+];
+const GROUND_RAMP_NIGHT_MOONLIT: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 2,
+  RAMP_G0 + 4,
+  RAMP_G0 + 6,
+];
+/** The soil span of the shaded ladder: interleave(soil), rows 16..22. */
+const GROUND_RAMP_NIGHT_MOONLIT_SHADED: Ramp = Array.from(
+  { length: 7 },
+  (_, i) => RAMP_G0 + i,
+);
+/** Everything but the bright-green rung: soil, turf bridges, green. */
+const GROUND_RAMP_NIGHT_MEADOW_SHADED: Ramp = Array.from(
+  { length: RAMP_G_N - 1 },
+  (_, i) => RAMP_G0 + i,
+);
 
 /** The ground ramp the current look shades through. */
 export function groundRamp(): Ramp {
-  if (LOOK.ramps) return LOOK.shades ? GROUND_RAMP_SHADED : GROUND_RAMP_ULAPLUS;
+  if (LOOK.ramps) {
+    if (LOOK.shades) {
+      if (LOOK.night === "meadow") return GROUND_RAMP_NIGHT_MEADOW_SHADED;
+      if (LOOK.night === "moonlit") return GROUND_RAMP_NIGHT_MOONLIT_SHADED;
+      return GROUND_RAMP_SHADED;
+    }
+    if (LOOK.night === "meadow") return GROUND_RAMP_NIGHT_MEADOW;
+    if (LOOK.night === "moonlit") return GROUND_RAMP_NIGHT_MOONLIT;
+    return GROUND_RAMP_ULAPLUS;
+  }
   return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
 }
 
 /**
- * Index of the highest rung of the current ground ramp that is still bare
- * earth rather than anything living. The shaded ladder spends its first seven
- * rungs on the four authored soil tones and their midpoints, then bridges to
- * green over the last four; the coarse ladders reach turf far sooner.
+ * Index of the highest rung of the ground ramp in force that is still bare
+ * earth rather than anything living. Anything shading ground *upward* stops
+ * here inside the dead wood, so it cannot manufacture grass in the one band
+ * whose premise is that nothing grows there — the relief pass lighting a slope
+ * that faces the moon does that, and so do the litter drifts, which is the one
+ * that actually needed a ceiling.
  *
- * Anything that shades ground *upward* stops here inside the dead wood, so it
- * cannot manufacture grass in the one band whose premise is that nothing grows
- * there. Two things do: the relief pass lighting a slope that faces the moon,
- * and the litter drifts, which is the one that actually needed a ceiling.
+ * Derived rather than tabulated: there are seven ground ladders now (coarse
+ * and shaded, times day / moonlit / meadow, plus the two non-ULAplus ones) and
+ * they disagree about where soil ends — the moonlit pair are soil all the way
+ * up and have no living rung at all. A hardcoded index was right for exactly
+ * one of them and silently wrong for the rest, so this walks the ramp instead
+ * and finds the last rung still inside the authored soil span.
  */
 export function bareRampTop(): number {
+  const ramp = groundRamp();
+  // The non-ULAplus ladders are [K, K, G, BG]: the two black rungs are "bare".
   if (!LOOK.ramps) return 1;
-  return LOOK.shades ? 6 : 2;
+  // interleave(soil) occupies the first seven ULAplus ground rows; everything
+  // above them bridges into turf and on into green ink (see palette.ts).
+  let top = 0;
+  for (let i = 0; i < ramp.length; i++) {
+    if (ramp[i] >= RAMP_G0 && ramp[i] <= RAMP_G0 + 6) top = i;
+  }
+  return top;
 }
 
 /**

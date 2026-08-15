@@ -20,20 +20,26 @@ but runs on a modern TypeScript engine at 60fps.
    through subtle CRT glass by default (toggleable). Amended from 8×8 cells /
    15 colours flat with the Dusk look, then to the Relief look (4-step ramps at
    palette 16–23 + rolling heightfield + CRT), then to the Shades look (the ramps
-   widened and three more families added) — all 2026-08-15. But the engine is
-   modern TS — unlimited memory, smooth 60fps, real floating-point math. The Z80
-   emulator elsewhere in this repo is not involved.
+   widened and three more families added), then to the moonlit night key (navy
+   sky-anchor values, three-magnitude starfield, all-soil ground mat) — all
+   2026-08-15. But the engine is modern TS — unlimited memory, smooth 60fps,
+   real floating-point math. The Z80 emulator elsewhere in this repo is not
+   involved.
 2. **Open world, honestly.** Free roaming in every direction is a first-class promise.
    Distant landmarks are real places at real bearings: *see a castle on the horizon →
-   walk to it → enter it.* No corridors dressed as worlds.
+   walk to it → enter it.* No corridors dressed as worlds. The horizon honours this
+   (the skyline ring, adopted 2026-08-15): sites beyond their draw range keep a
+   silhouette at their true bearing, sized by true distance, standing where the drawn
+   land meets the sky and dither-fading into their real geometry as you approach —
+   with nameless ruin stubs between them, dressing only, on the ranges' own fiction.
 
 ## Decisions
 
 | Branch | Decision |
 |---|---|
 | Runtime | Modern TS engine; Spectrum display lens. Emulator untouched. |
-| Look | **"Leyline — Relief, shaded"** (Relief adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day; the shades round adopted later the same day): a shaded ULAplus world — gradient night sky, tonal ground modelled rather than dithered, masonry with lit and shadowed faces, distance spent in value — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Flags in `lib/rpg/look.ts` (`V` drops back to the four-step ramps in game); Relief, Dusk and the original void-black look survive as presets. |
-| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Non-sprite palette rows, all derived from the sixteen colours and four soil / four sky tones a region table authors: index 8 earth tone, then ground (16–26), sky (27–33), stone (34–40), leaf (41–47), ley-light (48–54) and a dim rung per hue (55–62). Black stays black for water and sprite work. New shades interleave *between* the shipped ones, so the earlier four-step ladders are the even rungs and the look A/Bs against itself. Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
+| Look | **"Leyline — Relief, shaded, moonlit"** (Relief adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day; the shades round adopted later the same day): a shaded ULAplus world — gradient night sky, tonal ground modelled rather than dithered, masonry with lit and shadowed faces, distance spent in value — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Amended again 2026-08-15 (the night-key round, held against the graveyard concept frame): the sky anchors carry a just-visible navy night gradient under a deep azimuth-anchored starfield, and the ground mat shades through soil tones only — bright green ink marks growth, never ground. Flags in `lib/rpg/look.ts` (`night` and `skyline` dials, defaults moonlit + peopled; `V` drops back to the four-step ramps in game); Shades, Relief, Dusk and the original void-black look survive as presets. |
+| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Non-sprite palette rows, all derived from the sixteen colours and four soil / four sky tones a region table authors: index 8 earth tone, then ground (16–26), sky (27–33), stone (34–40), leaf (41–47), ley-light (48–54) and a dim rung per hue (55–62); the night key swaps the four sky anchors and re-interleaves, a ULAplus reload. Black stays black for water and sprite work. New shades interleave *between* the shipped ones, so the earlier four-step ladders are the even rungs and the look A/Bs against itself. Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
 | Camera | Smooth Mode-7-style rotation; hero at your back; the attribute grid stays fixed to the "glass" while the world turns beneath it. |
 | World | Open biomes (woods, plains, moor) + enterable sites (castles, towers, barrow dungeons). Interiors use the same perspective camera with walls closing in. |
 | Mechanics | Action-RPG: real-time aimed bolts + wards + utility spells; lifeforce; inventory and quest items; light stats that can deepen later. |
