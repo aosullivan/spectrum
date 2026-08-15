@@ -193,7 +193,7 @@ export function collectBillboards(
     // reached; otherwise the HUD hides more of it and creates false shrinkage.
     const footY = it.framedAtHud
       ? Math.max(it.h + 2, Math.min(it.baseY, HUD_TOP))
-      : it.baseY;
+      : Math.min(it.baseY, HUD_TOP);
     // Far billboards dissolve into the dark like the terrain does — but
     // landmarks never do: they already swap to low-detail LOD art at range,
     // and a dithered castle reads as noise instead of a destination.

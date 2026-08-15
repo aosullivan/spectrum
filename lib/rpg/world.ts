@@ -294,17 +294,65 @@ const PLACED: Feature[] = [
   // visible in the reference frame while remaining ordinary world objects.
   { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
   { x: -138, y: 236, sprite: SARSEN_TALL, height: 62 },
-  { x: 92, y: 244, sprite: MENHIR, height: 42 },
+  {
+    x: 92,
+    y: 244,
+    sprite: MENHIR,
+    height: 42,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
   { x: -236, y: 410, sprite: SARSEN_TALL, height: 70 },
   { x: 178, y: 390, sprite: SARSEN_TALL, height: 68 },
 
-  { x: CIRCLE_POS.x, y: CIRCLE_POS.y, sprite: DOLMEN, height: 26 },
-  { x: CIRCLE_POS.x - 34, y: CIRCLE_POS.y - 14, sprite: STONE_L, height: 18 },
-  { x: CIRCLE_POS.x + 30, y: CIRCLE_POS.y - 10, sprite: MENHIR, height: 16 },
-  { x: CIRCLE_POS.x - 20, y: CIRCLE_POS.y + 26, sprite: STONE_M, height: 14 },
-  { x: CIRCLE_POS.x + 22, y: CIRCLE_POS.y + 22, sprite: STONE_L, height: 17 },
-  { x: CIRCLE_POS.x + 2, y: CIRCLE_POS.y + 34, sprite: STONE_S, height: 10 },
-  { x: CIRCLE_POS.x - 48, y: CIRCLE_POS.y + 6, sprite: MENHIR, height: 15 },
+  {
+    x: CIRCLE_POS.x,
+    y: CIRCLE_POS.y,
+    sprite: DOLMEN,
+    height: 26,
+    lod: [{ minH: 14, sprite: TRILITHON }],
+  },
+  {
+    x: CIRCLE_POS.x - 34,
+    y: CIRCLE_POS.y - 14,
+    sprite: STONE_L,
+    height: 18,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x + 30,
+    y: CIRCLE_POS.y - 10,
+    sprite: MENHIR,
+    height: 16,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x - 20,
+    y: CIRCLE_POS.y + 26,
+    sprite: STONE_M,
+    height: 14,
+    lod: [{ minH: 10, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x + 22,
+    y: CIRCLE_POS.y + 22,
+    sprite: STONE_L,
+    height: 17,
+    lod: [{ minH: 11, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x + 2,
+    y: CIRCLE_POS.y + 34,
+    sprite: STONE_S,
+    height: 10,
+    lod: [{ minH: 9, sprite: SARSEN_TALL }],
+  },
+  {
+    x: CIRCLE_POS.x - 48,
+    y: CIRCLE_POS.y + 6,
+    sprite: MENHIR,
+    height: 15,
+    lod: [{ minH: 10, sprite: SARSEN_TALL }],
+  },
 
   // The henge: five trilithons in a ring, each far taller than the mage,
   // with outliers fallen around them.
@@ -409,6 +457,7 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
       y: baseY + ((bh >> 2) % CHUNK),
       sprite: kind === 0 ? SARSEN_FALLEN : kind === 1 ? STONE_LEANING : MENHIR,
       height: 8 + (bh % 5) * 2,
+      lod: kind === 0 ? undefined : [{ minH: 9, sprite: SARSEN_TALL }],
     });
   }
 
