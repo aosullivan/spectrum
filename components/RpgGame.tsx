@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Game, emptyInput, type InputState } from "@/lib/rpg/game";
+import { LOOK } from "@/lib/rpg/look";
 import { SCREEN_H, SCREEN_W, Screen } from "@/lib/rpg/screen";
 
 const STEP = 1 / 60;
@@ -66,6 +67,12 @@ export function RpgGame() {
           crtRef.current = !v;
           return !v;
         });
+        return;
+      }
+      // The key the world is lit by. LOOK is read afresh every frame, so
+      // flipping the flag is the whole of the switch.
+      if (down && !e.repeat && e.code === "KeyN") {
+        LOOK.daylight = !LOOK.daylight;
         return;
       }
       // Commands are edge-triggered: the game consumes them and key-repeat

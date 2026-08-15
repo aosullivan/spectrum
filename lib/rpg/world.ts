@@ -35,8 +35,8 @@ import {
   HERMITAGE_PROPS,
   HERMITAGE_R,
 } from "@/lib/rpg/hermitage";
-import { LOOK } from "@/lib/rpg/look";
-import { B, BC, BG, BW, C, E, G, K, RAMP_G0, W } from "@/lib/rpg/palette";
+import { LOOK, daylight } from "@/lib/rpg/look";
+import { B, BB, BC, BG, BW, C, E, G, K, RAMP_G0, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 import {
@@ -114,11 +114,54 @@ const GROUND_RAMP_ULAPLUS: Ramp = [
   G,
   BG,
 ];
+/**
+ * By day the ground has colours in it, not just values, and *no ink in it at
+ * all*: shadowed earth, turned earth, dry ochre, lit turf, all four of them
+ * terrain rows the region authored. That fourth row (RAMP_G0+3) is the one the
+ * night key never had a use for.
+ *
+ * The night ramp spends three rows getting out of the dark and then hands its
+ * whole lit half to G and BG. Under a night that reads as light finding a few
+ * things; under a sun it reads as a lawn. The ULA greens are the most
+ * chromatic entries in the table — pure `00d800` on the moor — so wherever the
+ * lushness field runs high they flood, and slope shading makes it worse by
+ * pushing every hillside a step further up. Measured on the moor before this
+ * change: 37% of the ground was one saturated green.
+ *
+ * So the ground ends on the palette's own turf instead. Green still marks
+ * growth — it is what the bushes, bracken and crops are drawn in — but it is
+ * never what the ground *is*, and every tone underfoot is now a number a
+ * region can tune. Nothing on the reference frame is anywhere near that
+ * saturated either; grass photographs as ochre and olive far more than it
+ * photographs as green.
+ */
+const GROUND_RAMP_DAY: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 1,
+  RAMP_G0 + 2,
+  RAMP_G0 + 3,
+];
 
 /** The ground ramp the current look shades through. */
 export function groundRamp(): Ramp {
-  if (LOOK.ramps) return GROUND_RAMP_ULAPLUS;
+  if (LOOK.ramps) return daylight() ? GROUND_RAMP_DAY : GROUND_RAMP_ULAPLUS;
   return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
+}
+
+/**
+ * How far up the ramp a lushness `level` sits once distance has had its say.
+ *
+ * At night distance is simply an absence of light: the field scales toward the
+ * bottom of the ramp and the moor fades into its own darkness. Daylight works
+ * the other way round — air is not empty, and the far moor is *paler and
+ * flatter* than the near one, not darker. So the day key blends toward a fixed
+ * mid-ramp haze instead of toward zero, which lifts the distance and, because
+ * the blend also shrinks the field's swing, quiets its noise at the same time.
+ */
+const HAZE_LEVEL = 0.56;
+
+export function groundLevel(level: number, far: number): number {
+  return daylight() ? level * far + HAZE_LEVEL * (1 - far) : level * far;
 }
 
 /**
@@ -145,6 +188,18 @@ function band(v: number, a: number, b: number): number {
  * mat over and hands the frame to green. Distance scales it down on top.
  */
 const MAT_DENSITY = 1.05;
+
+/**
+ * Ground that is deliberately *not* the mat — a swept yard, a trodden path,
+ * the margin of a sown bed. At night these return black outright, which is
+ * why they read as worn: the mat's darkness becomes soil under the look's
+ * ramp, and theirs does not. Under the sun black is no longer a surface at
+ * all, so the same ground takes the ramp's turned-earth row and keeps its
+ * marks; it is still the one patch around with no growth on it.
+ */
+function bareEarth(): number {
+  return daylight() ? RAMP_G0 + 1 : K;
+}
 
 /**
  * Ground colour at a world point, or K for bare dark earth.
@@ -176,15 +231,19 @@ export function groundColour(
   const ix = Math.floor(wx);
   const iy = Math.floor(wy);
 
-  // --- the sacred pool: black glass under the moon ---
-  // Still water is not painted water. It is deliberate black — K returned
-  // here passes through every look untouched, unlike the mat's darkness,
-  // which the look's ramp turns to soil — and everything the water says is
-  // laid ON the black: a moon-glade of broken glitter running
-  // toward the moon's bearing, single star-glints, two thin rings widening
-  // from where the lady stands, and lily pads rafted near the shore. The
-  // old look — a solid bright rim around a 50% blue checkerboard — read as
-  // a paddling pool; a mirror reads as what it reflects.
+  // --- the sacred pool: black glass under the moon, open water by day ---
+  // Still water is not painted water. At night it is deliberate black — K
+  // returned here passes through every look untouched, unlike the mat's
+  // darkness, which the look's ramp turns to soil — and everything the water
+  // says is laid ON the black: a glade of broken glitter running toward the
+  // light's bearing, single glints, two thin rings widening from where the
+  // lady stands, and lily pads rafted near the shore. The old look — a solid
+  // bright rim around a 50% blue checkerboard — read as a paddling pool; a
+  // mirror reads as what it reflects.
+  //
+  // A mirror by day reflects a bright sky, so the same water resolves to blue
+  // with cyan in it. Everything laid on top is untouched: the glitter still
+  // runs to the sun's bearing, the rings still spread.
   const gx = wx - GROVE_POS.x;
   const gy = wy - GROVE_POS.y;
   const gd = Math.sqrt(gx * gx + gy * gy);
@@ -222,9 +281,15 @@ export function groundColour(
     }
     // Star-glints: single pixels, appearing and going out.
     if (hash(ix * 3 + Math.floor(t * 1.5), iy * 5) < 5) return BW;
-    // A whisper of deep blue in the black keeps it reading as water.
-    if (hash(ix >> 1, iy >> 1) < 85 && (ix + iy) % 2 === 0) return B;
-    return K;
+    // A whisper of deep blue in the black keeps it reading as water. By day
+    // the pair steps up rather than changing character: bright blue broken
+    // over blue. Not C — the ground pass reads cyan as leyline light and
+    // lifts it out of the clash, which is right for the rings above and
+    // wrong for the body of the water.
+    if (hash(ix >> 1, iy >> 1) < 85 && (ix + iy) % 2 === 0) {
+      return daylight() ? BB : B;
+    }
+    return daylight() ? B : K;
   }
   if (gd < GROVE_R) {
     // The shore: a dark wet lip, then a silvered verge where the moon
@@ -241,7 +306,7 @@ export function groundColour(
     if (gx < 4) {
       const wob = ((hash(ix >> 4, 991) % 5) - 2) * 0.9;
       if (Math.abs(gy - wob) < 3.2) {
-        return hash(ix, iy + 17) < 55 ? W : K;
+        return hash(ix, iy + 17) < 55 ? W : bareEarth();
       }
     }
   }
@@ -256,7 +321,7 @@ export function groundColour(
     const cobble = hash(ix >> 1, iy >> 1);
     if (cobble < 95 && (ix + iy) % 3 === 0) return W;
     if ((iy & 15) === 0 && (ix & 7) < 3) return W;
-    return K;
+    return bareEarth();
   }
 
   // --- the hermit's plot: the one bed of living green in the dead wood, and
@@ -265,7 +330,7 @@ export function groundColour(
   const hy = wy - (HERMITAGE_POS.y - 76);
   if (Math.abs(hx) < 46 && Math.abs(hy) < 30) {
     // Sown in rows, so it reads as tended rather than as a patch of weed.
-    if (Math.abs(hy) > 26 || Math.abs(hx) > 42) return K;
+    if (Math.abs(hy) > 26 || Math.abs(hx) > 42) return bareEarth();
     if (iy % 7 < 3 && hash(ix, iy + 3131) < 620) {
       return hash(ix, iy + 4242) < 90 ? BG : G;
     }
@@ -365,7 +430,7 @@ export function groundColour(
     return W;
   }
 
-  return rampColour(groundRamp(), level * far, sx, sy);
+  return rampColour(groundRamp(), groundLevel(level, far), sx, sy);
 }
 
 // ------------------------------------------------------------------ features

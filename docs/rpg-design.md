@@ -16,8 +16,12 @@ but runs on a modern TypeScript engine at 60fps.
    ULAplus-fiction terrain rows — per-region 4-step ground and sky value ramps
    (palette 16–23) — background art limited to 2 colours per 8×1 attribute strip
    (the Timex hi-colour fiction), presented through subtle CRT glass by default
-   (toggleable). Amended from 8×8 cells / 15 colours flat with the Dusk look, then
-   to the Relief look (ramps + rolling heightfield + CRT), both 2026-08-15. But the
+   (toggleable). Each region authors those eight rows **twice**, once per key —
+   night and day are the same world under two lights, and only the terrain rows
+   move: the sixteen ULA words are paint and hold at every hour. Amended from
+   8×8 cells / 15 colours flat with the Dusk look, then to the Relief look
+   (ramps + rolling heightfield + CRT), both 2026-08-15, then to the two keys
+   (2026-08-15). But the
    engine is modern TS — unlimited memory, smooth 60fps, real floating-point math.
    The Z80 emulator elsewhere in this repo is not involved.
 2. **Open world, honestly.** Free roaming in every direction is a first-class promise.
@@ -29,8 +33,9 @@ but runs on a modern TypeScript engine at 60fps.
 | Branch | Decision |
 |---|---|
 | Runtime | Modern TS engine; Spectrum display lens. Emulator untouched. |
-| Look | **"Leyline — Relief"** (adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day): a shaded ULAplus world — gradient night sky, mottled tonal ground, lit leyline verge — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Flags in `lib/rpg/look.ts`; Dusk and the original void-black look survive as presets. |
-| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Terrain-only palette rows: index 8 earth tone, 16–19 ground ramp, 20–23 sky ramp (black stays black for water and sprite work). Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
+| Look | **"Leyline — Relief"** (adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day): a shaded ULAplus world — gradient sky, mottled tonal ground, lit leyline verge — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Flags in `lib/rpg/look.ts`; Dusk and the original void-black look survive as presets. |
+| Key | **Daylight** (2026-08-15, from the user's lit-landscape reference): the sun up over the same Relief world. Ground walks the region's four terrain rows — shadowed earth, turned earth, dry ochre, lit turf — and **no ink at all**: green marks what grows, never what the ground is, which is the same rule the night ramp follows and the only thing that keeps a lush biome from reading as a lawn. Distance blends toward mid-ramp haze rather than toward the dark, far ranges stand in the sky's own zenith blue under broken snow, and the sky spends its four rows evenly enough that the pale band is a third of it. Slope shading dithers its step, since a whole step of a four-row ramp flattens the hills it is drawing. Stars and moon give way to a sun on the same bearing. `N` toggles; the moonlit night survives whole as the `night` preset and renders bit-identically to what it always did. |
+| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Terrain-only palette rows: index 8 earth tone, 16–19 ground ramp, 20–23 sky ramp, authored once per key. Under the night key black stays black for water and swept earth; under the day key those surfaces take real colours, because black is no longer a surface the sun could produce. Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
 | Camera | Smooth Mode-7-style rotation; hero at your back; the attribute grid stays fixed to the "glass" while the world turns beneath it. |
 | World | Open biomes (woods, plains, moor) + enterable sites (castles, towers, barrow dungeons). Interiors use the same perspective camera with walls closing in. |
 | Mechanics | Action-RPG: real-time aimed bolts + wards + utility spells; lifeforce; inventory and quest items; light stats that can deepen later. |
@@ -50,6 +55,13 @@ contour/tuft terrain floating in black; gnarled leafless trees; a keep silhouett
 a lit gate on the horizon; a cyan leyline running down the path; the hooded hero
 hovering (no legs, robe tapering to a wisp); a dark HUD with a yellow spell name in
 blocky pixel text, a green LIFEFORCE bar, and rune icons.
+
+The daylight key (2026-08-15) was set against a second reference the user
+supplied: a lit landscape in the same idiom — pale cyan horizon under a banded
+blue sky, blue-grey ranges with snow on them, a gold dithered track over green
+turf, water reading blue. That frame is what the day rows, the haze falloff and
+the far-range treatment were tuned to; the night concept above still governs
+everything the sun does not touch.
 
 ## V1 slice (agreed scope)
 

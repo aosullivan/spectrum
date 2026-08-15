@@ -15,6 +15,7 @@ import {
   MOONLIT,
   PAL_TELEVISION,
   ULA_STANDARD,
+  lit,
   type PaletteTable,
 } from "@/lib/rpg/palette";
 import {
@@ -37,7 +38,7 @@ function ramp(v: number, lo: number, hi: number): number {
 
 function newTable(): [number, number, number][] {
   return Array.from(
-    { length: ULA_STANDARD.length },
+    { length: ULA_STANDARD.night.length },
     () => [0, 0, 0] as [number, number, number],
   );
 }
@@ -70,22 +71,26 @@ function mix(
  * West to east the world runs dead wood, moor, greenwood, and each band has its
  * own weather: the old wood is dying under a late warm sun, the moor is the
  * cold electric baseline, the greenwood is softened like a picture on a
- * television. The grove overrides whichever band it sits in — still water under
- * a moon is the one place that should not look like the forest around it.
+ * television. The grove overrides whichever band it sits in — still water is
+ * the one place that should not look like the forest around it.
+ *
+ * Each mood is asked for the key in force first (`lit`), so night and day are
+ * the same map of the world under two different lights.
  */
 export function paletteAt(x: number, y: number): PaletteTable {
-  let out: PaletteTable = ULA_STANDARD;
+  const moor = lit(ULA_STANDARD);
+  let out: PaletteTable = moor;
   if (x < DEAD_WOOD_X + BAND_FADE) {
     out = mix(
-      EMBER_DUSK,
-      ULA_STANDARD,
+      lit(EMBER_DUSK),
+      moor,
       ramp(x, DEAD_WOOD_X - BAND_FADE, DEAD_WOOD_X + BAND_FADE),
       banded,
     );
   } else if (x > GREENWOOD_EDGE_X - BAND_FADE) {
     out = mix(
-      ULA_STANDARD,
-      PAL_TELEVISION,
+      moor,
+      lit(PAL_TELEVISION),
       ramp(x, GREENWOOD_EDGE_X - BAND_FADE, GREENWOOD_EDGE_X + BAND_FADE),
       banded,
     );
@@ -93,7 +98,7 @@ export function paletteAt(x: number, y: number): PaletteTable {
   const grove = Math.hypot(x - GROVE_POS.x, y - GROVE_POS.y);
   if (grove < GROVE_R + GROVE_FADE) {
     out = mix(
-      MOONLIT,
+      lit(MOONLIT),
       out,
       ramp(grove, GROVE_R - GROVE_FADE, GROVE_R + GROVE_FADE),
       blended,

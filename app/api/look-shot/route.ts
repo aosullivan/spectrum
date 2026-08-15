@@ -16,7 +16,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Game, emptyInput } from "@/lib/rpg/game";
-import { PALETTE_RGB } from "@/lib/rpg/palette";
+import { paletteAt } from "@/lib/rpg/regions";
 import { HUD_TOP, SCREEN_H, SCREEN_W, Screen } from "@/lib/rpg/screen";
 import { groundColour } from "@/lib/rpg/world";
 
@@ -116,6 +116,7 @@ export async function GET(req: Request): Promise<Response> {
     const cx = Number(url.searchParams.get("cx") ?? 0);
     const cy = Number(url.searchParams.get("cy") ?? 700);
     const span = Number(url.searchParams.get("span") ?? 4);
+    screen.palette = paletteAt(cx, cy);
     for (let y = 0; y < SCREEN_H; y++) {
       for (let x = 0; x < SCREEN_W; x++) {
         const wx = cx + (x - SCREEN_W / 2) * span;
@@ -143,13 +144,17 @@ export async function GET(req: Request): Promise<Response> {
     }
   }
 
+  // Through the table the frame was actually drawn under — game.render sets
+  // it from the camera's region, and it differs from the default everywhere
+  // but the moor, and now under the other key everywhere at all.
+  const table = screen.palette;
   const w = SCREEN_W * scale;
   const h = SCREEN_H * scale;
   const rgb = new Uint8Array(w * h * 3);
   for (let y = 0; y < h; y++) {
     const sy = (y / scale) | 0;
     for (let x = 0; x < w; x++) {
-      const [r, g, b] = PALETTE_RGB[screen.fb[sy * SCREEN_W + ((x / scale) | 0)]];
+      const [r, g, b] = table[screen.fb[sy * SCREEN_W + ((x / scale) | 0)]];
       const o = (y * w + x) * 3;
       rgb[o] = r;
       rgb[o + 1] = g;
