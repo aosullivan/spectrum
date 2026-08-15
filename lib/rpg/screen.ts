@@ -1,7 +1,7 @@
 // The indexed framebuffer and its drawing verbs. 256x192 palette indices,
 // drawn back-to-front each frame, then presented to a canvas in one pass.
 
-import { K, PALETTE_RGB, T } from "@/lib/rpg/palette";
+import { K, PALETTE_RGB, T, type PaletteTable } from "@/lib/rpg/palette";
 
 export const SCREEN_W = 256;
 export const SCREEN_H = 192;
@@ -33,16 +33,6 @@ export function sprite(rows: string[], legend: Record<string, number>): Sprite {
   return { w, h, data };
 }
 
-/** Squared RGB distance between two palette entries. */
-function colourDistance(a: number, b: number): number {
-  const [ar, ag, ab] = PALETTE_RGB[a];
-  const [br, bg, bb] = PALETTE_RGB[b];
-  const dr = ar - br;
-  const dg = ag - bg;
-  const db = ab - bb;
-  return dr * dr + dg * dg + db * db;
-}
-
 /** Deterministic 2D hash -> 0..999. Same recipe as the concept art. */
 export function hash(x: number, y: number): number {
   let h = (x * 374761393 + y * 668265263) | 0;
@@ -53,12 +43,28 @@ export function hash(x: number, y: number): number {
 
 export class Screen {
   readonly fb = new Uint8Array(SCREEN_W * SCREEN_H);
+  /**
+   * The RGB the framebuffer's indices resolve to. Set per frame from the
+   * player's position (see regions.ts); the drawing verbs never consult it, so
+   * changing it repaints everything already drawn and nothing has to be redrawn.
+   */
+  palette: PaletteTable = PALETTE_RGB;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly image: ImageData;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.image = ctx.createImageData(SCREEN_W, SCREEN_H);
+  }
+
+  /** Squared RGB distance between two palette entries, in the table in force. */
+  private colourDistance(a: number, b: number): number {
+    const [ar, ag, ab] = this.palette[a];
+    const [br, bg, bb] = this.palette[b];
+    const dr = ar - br;
+    const dg = ag - bg;
+    const db = ab - bb;
+    return dr * dr + dg * dg + db * db;
   }
 
   clear(colour = K): void {
@@ -171,9 +177,10 @@ export class Screen {
               // Snap strays to the nearer survivor in RGB, not by the bright
               // bit: a bright-white pixel in a white-on-black cell must land
               // on white, and matching bright bits would send it to black.
-              this.fb[i] = colourDistance(colour, ink) <= colourDistance(colour, paper)
-                ? ink
-                : paper;
+              this.fb[i] =
+                this.colourDistance(colour, ink) <= this.colourDistance(colour, paper)
+                  ? ink
+                  : paper;
             }
           }
         }
@@ -185,7 +192,7 @@ export class Screen {
   present(): void {
     const out = this.image.data;
     for (let i = 0; i < this.fb.length; i++) {
-      const [r, g, b] = PALETTE_RGB[this.fb[i]];
+      const [r, g, b] = this.palette[this.fb[i]];
       const o = i * 4;
       out[o] = r;
       out[o + 1] = g;
