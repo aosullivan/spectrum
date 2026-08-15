@@ -18,8 +18,16 @@ export const FOCAL = 110;
 export const CAM_HEIGHT = 26;
 /** How far behind the hero the eye sits. */
 export const CAM_BACK = 32;
-/** Most a billboard may be blown up past the size it was drawn at. */
-const MAX_MAGNIFY = 4;
+/**
+ * Most a billboard may be blown up past the size it was drawn at. Held as a
+ * backstop for the pathological case — your face against a stone — rather
+ * than as a working limit: at four the cap bit an oak fifty-six units out,
+ * which is most of the way across a clearing, and froze the whole approach.
+ * The solid megaliths that motivated a cap at all are kept at arm's length
+ * by their collision radius long before this, and `blitScaled` softens and
+ * thins heavy magnification from 2.6x up, so there is art to look at here.
+ */
+const MAX_MAGNIFY = 8;
 
 export interface CameraState {
   x: number;
@@ -162,23 +170,37 @@ export function collectBillboards(
     const lat = dx * fy - dy * fx;
     const screenX = 128 + (lat * FOCAL) / z;
     if (screenX < -80 || screenX > SCREEN_W + 80) continue;
-    let h = (it.height * FOCAL) / z;
-    let framedAtHud = false;
-    if (it.landmark) {
-      h = Math.max(h, 7);
-    } else if (h < 1.5 || h > HUD_TOP * 2.5) {
-      continue;
-    }
+    // Every size limit is expressed as a depth the drawing stops closing
+    // past, never as a clamp on the height alone. Clamping the height while
+    // the foot line kept sliding down the screen was what made near things
+    // shrink: the sprite is drawn upward from its feet, so a frozen height
+    // over a descending foot drags the crown of a tree *down* as you walk
+    // into it. An oak's top fell forty rows over the last twenty-five units
+    // of its approach when perspective wanted it to climb a hundred. Freeze
+    // the depth instead and the whole billboard freezes together — it stops
+    // resolving, but it never reverses.
+    //
     // Nothing is drawn at more than a few times the size it was drawn at.
     // Past that there is no more information in the sprite, only bigger
     // pixels: a forty-by-fourteen fallen sarsen taken to nine times scale
     // is three hundred and seventy pixels of flat grey with black slabs in
     // it, which reads as a brick wall rather than as a stone you are
     // standing beside.
-    h = Math.min(h, it.sprite.h * MAX_MAGNIFY);
-    if (it.maxScreenHeight !== undefined && h > it.maxScreenHeight) {
-      h = it.maxScreenHeight;
-      framedAtHud = true;
+    const zMagnify = (it.height * FOCAL) / (it.sprite.h * MAX_MAGNIFY);
+    // Keep very large actors framed at interaction range — the same trick,
+    // at whatever distance the caller asked to stop closing.
+    const zFramed =
+      it.maxScreenHeight !== undefined ? (it.height * FOCAL) / it.maxScreenHeight : 0;
+    const framedAtHud = zFramed > Math.max(z, zMagnify);
+    // Lateral placement stays on the true depth, so a frozen billboard still
+    // tracks its world position as you strafe past it; only its size and its
+    // footing hold still.
+    const zDraw = Math.max(z, zMagnify, zFramed);
+    let h = (it.height * FOCAL) / zDraw;
+    if (it.landmark) {
+      h = Math.max(h, 7);
+    } else if (h < 1.5) {
+      continue;
     }
     let sprite = it.sprite;
     if (it.frames && it.frames.length > 0) {
@@ -197,11 +219,13 @@ export function collectBillboards(
     // standing on the flags. `stands` lifts the whole prop to a storey, so
     // battlements on the roof sit at roof height rather than in the mud.
     // Under the relief look everything also stands on its hillside.
+    // On `zDraw`, not `z`: the footing has to freeze on the same depth the
+    // height froze on, or the two disagree and the sprite slides again.
     const baseY =
-      groundRow(z, eyeY) -
+      groundRow(zDraw, eyeY) -
       (((it.elevate ?? 0) + (it.stands ?? 0) + (terrain ? terrain(it.x, it.y) : 0)) *
         FOCAL) /
-        z;
+        zDraw;
     drawn.push({
       z,
       screenX,
@@ -214,7 +238,7 @@ export function collectBillboards(
       highlight: it.highlight,
       energy: it.energy,
       mirror: it.mirror,
-      hoverPx: ((it.elevate ?? 0) * FOCAL) / z,
+      hoverPx: ((it.elevate ?? 0) * FOCAL) / zDraw,
     });
   }
 
