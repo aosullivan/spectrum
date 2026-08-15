@@ -197,8 +197,12 @@ function paintFaceDetail(
     for (let d = 8; d < length; d += 9) {
       stroke(d / length, box.base + 3, d / length, box.top - 3, W);
     }
-    stroke(0.03, box.base + 18, 0.97, box.base + 18, BW);
-    stroke(0.03, box.base + 48, 0.97, box.base + 48, BW);
+    // Ledgers as a fraction of the door, not at fixed heights: the keep's
+    // gate is seventy units tall and a hut's is twenty, and a fixed offset
+    // draws the upper band off the top of the short one and onto the wall.
+    const rise = box.top - box.base;
+    stroke(0.03, box.base + rise * 0.26, 0.97, box.base + rise * 0.26, BW);
+    stroke(0.03, box.base + rise * 0.69, 0.97, box.base + rise * 0.69, BW);
     if (box.detail === "door") {
       stroke(0.5, box.base + 25, 0.38, box.base + 35, BC);
       stroke(0.38, box.base + 35, 0.5, box.base + 45, BC);
