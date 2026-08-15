@@ -62,26 +62,29 @@ export const HERMITAGE_BOXES: readonly Box[] = [
 ];
 
 /**
- * Split logs stacked end-on, the courses widening as they come down.
- * (20x13)
+ * A cord of cut rounds stacked between two stakes, end grain facing out —
+ * every log a disc with a shaded seam and a pith dot, one split half-log
+ * resting tilted across the top. The old pile was ruled courses of white
+ * and its wkwk texture sampled into brick, never into wood.
+ * (26x13)
  */
 export const WOODPILE = sprite(
   [
-    "...HHHHHHHHHHHHHH...",
-    "..HwkwkwkwkwkwkwH...",
-    "..HwwwwwwwwwwwwwH...",
-    "..HHHHHHHHHHHHHHH...",
-    ".HwkwkwkwkwkwkwkwH..",
-    ".HwwwwwwwwwwwwwwwH..",
-    ".HHHHHHHHHHHHHHHHH..",
-    "HwkwkwkwkwkwkwkwkwH.",
-    "HwwwwwwwwwwwwwwwwwH.",
-    "HHHHHHHHHHHHHHHHHHH.",
-    "HwkwkwkwkwkwkwkwkwH.",
-    "HwwwwwwwwwwwwwwwwwH.",
-    "HHHHHHHHHHHHHHHHHHH.",
+    "WW......................Ww",
+    "ww.WWW..................ww",
+    "ww.wwwWWWWWw..WWw.......ww",
+    "ww....wwwkwwwwwwwwWWw...ww",
+    "ww......wwkwwwwwwwwww...ww",
+    "ww....wwwwwkwwwwkwwwkw..ww",
+    "ww...wwwwwwwwwwwwwwwwww.ww",
+    "ww...wwwwwwwkwwwwwwwwkwwww",
+    "ww.wwwwwkwwwwkwwwwkwwwk.ww",
+    "wwwwwwwwwwwwwwwwwwwwwwwwww",
+    "wwwwkwwwwwwwwwkwwwwwwwwwww",
+    "wwwwwkwwwwkwwwwkwwwwkwwkww",
+    "ww.www..www..www..www.w.ww",
   ],
-  { H: BW, w: W, k: K },
+  { w: W, W: BW, k: K },
 );
 
 /**
