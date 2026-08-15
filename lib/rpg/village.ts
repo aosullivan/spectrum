@@ -97,61 +97,72 @@ export const INN_SIGN = sprite(
   { W: BW, Y: Y, K },
 );
 
-/** An apron-clad innkeeper, kept mostly monochrome like the references. */
+/**
+ * The innkeeper: stout, aproned, both hands on the hips. The gaps
+ * between arm and body are what make him legible in the lane.
+ * (16x22)
+ */
 export const VILLAGE_INNKEEPER = sprite(
   [
-    ".....HHHHH.....",
-    "....HwwwwwH....",
-    "....HwkkkwH....",
-    "....HwwwwwH....",
-    ".....HwwwH.....",
-    "...HHwwwwwHH...",
-    "..HwwwwwwwwwH..",
-    "..HwwHHHHHwwH..",
-    "..HwwHwwwHwwH..",
-    ".HwwwHwwwHwwwH.",
-    ".HwwwHwwwHwwwH.",
-    ".HwwwHwwwHwwwH.",
-    "..HwwHwwwHwwH..",
-    "..HwwHwwwHwwH..",
-    "..HwwHHHHHwwH..",
-    "...HwwwwwwwH...",
-    "...HwwwHwwwH...",
-    "...HwwwHwwwH...",
-    "...HwwwHwwwH...",
-    "...Hww...wwH...",
-    "..HHww...wwHH..",
-    ".HHH.......HHH.",
+    "................",
+    "................",
+    ".......HHH......",
+    "......HwwwH.....",
+    "......Hkwkw.....",
+    "......Hwwww.....",
+    ".......Hww......",
+    ".....HHwwwHH....",
+    "...HHwwwwwwwHH..",
+    "..HwwwwwwwwwwwH.",
+    "..Hwwwwwwwwwwww.",
+    ".HwwwwkkkkkwwwwH",
+    ".Hwwwwwwwwwwwwww",
+    ".Hwwwwwwwwwwwwww",
+    "..Hwwwkwwwkwwww.",
+    "..Hwwwwwwwwwwww.",
+    ".....Hwwwwww....",
+    ".....Hww.Hww....",
+    ".....Hww.Hww....",
+    ".....Hww.Hww....",
+    ".....Hww.Hww....",
+    "....Hwww.HwwH...",
   ],
-  { H: BW, w: W, k: K },
+  { w: W, H: BW, k: K },
 );
 
-/** A hooded villager carrying a small lantern through the lane. */
+/**
+ * A villager mid-stride with a pack and a lit lantern held out at arm's
+ * length. The lantern hangs clear of the body on purpose: carried against
+ * the chest it merges into the cloth, and the figure goes back to being one
+ * more pale upright on the lane.
+ * (16x22)
+ */
 export const VILLAGE_WANDERER = sprite(
   [
-    ".....HHHHH.....",
-    "....HwwwwwH....",
-    "...HwwwwwwwH...",
-    "...HwwkkkwwH...",
-    "....HwwwwwH....",
-    "...HHwwwwwHH.H.",
-    "..HwwwwwwwwwHH.",
-    "..HwwwwwwwwwH..",
-    ".HwwwwwwwwwwwH.",
-    ".HwwwwwwwwwwwH.",
-    ".HwwwwwwwwwwwH.",
-    "..HwwwwwwwwwH..",
-    "..HwwwwwwwwwH..",
-    "...HwwwHwwwH...",
-    "...HwwwHwwwH.y.",
-    "...HwwwHwwwHyyy",
-    "...HwwwHwwwH.y.",
-    "...HwwwHwwwH.H.",
-    "...Hww...wwH.H.",
-    "..HHw.....wHHH.",
-    ".HHH.......HHH.",
+    "................",
+    "......H.........",
+    ".....HwH........",
+    "....HkwkH.......",
+    ".....HwH........",
+    "......H.........",
+    "..HHHHwHHH......",
+    "..HwwwwwwH......",
+    "..HwwwwwwwH.....",
+    "..HwwwwwwH.HH...",
+    "..HwwwwwwH..H...",
+    "...HwwwwwHHHHHH.",
+    "...HwwwwwHyyyyy.",
+    "...HwwwwwHyYYYy.",
+    "...HHwwwwHyyYyy.",
+    ".....HwwH.yyyyy.",
+    ".....HHHH.HHHHH.",
+    "....HH..HH......",
+    "....HH..HH......",
+    "....HH..HH......",
+    "...HH....HH.....",
+    "...HH....HH.....",
   ],
-  { H: BW, w: W, k: K, y: BY },
+  { H: BW, w: W, k: K, y: Y, Y: BY },
 );
 
 export const VILLAGE_PROPS: readonly Billboard[] = [

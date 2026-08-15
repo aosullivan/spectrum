@@ -61,59 +61,140 @@ function wrapAngle(a: number): number {
 // wyrm to the left, and the keep straight up the leyline.
 const MOON_AZIMUTH = -0.72;
 
+/**
+ * Height of a range of hills above the horizon at an azimuth, in pixels.
+ * Built from harmonics of the sky's own period so the land closes on itself
+ * exactly once per turn — a ridge that did not wrap would tear as you spun.
+ */
+function ridgeAt(wx: number, range: number): number {
+  const a = (wx / SKY_PERIOD) * Math.PI * 2;
+  // The harmonics have to be high enough to undulate within ONE SCREEN. The
+  // view spans about a quarter of a turn, so a ridge built from the first
+  // two or three harmonics is very nearly flat across the picture and reads
+  // as a dashed rule drawn across the sky rather than as hills.
+  if (range === 0) {
+    return (
+      15 +
+      Math.sin(a * 2 + 0.3) * 6 +
+      Math.sin(a * 5 + 1.1) * 4 +
+      Math.sin(a * 9 + 2.3) * 2.5
+    );
+  }
+  return (
+    7 +
+    Math.sin(a * 3 + 0.4) * 5 +
+    Math.sin(a * 7 + 2.0) * 3.5 +
+    Math.sin(a * 13 + 1.4) * 2
+  );
+}
+
 function drawSky(s: Screen, yaw: number, dead: boolean): void {
   const scroll = Math.round(yaw * SKY_PX_PER_RAD);
   const skyline = dead ? W : G;
-  // Sparse cold stars, anchored to azimuth so they wheel as you turn.
+  // The land itself, standing between the stars and the moor: a far range
+  // and a nearer one. Hills on a black sky are not painted, they are the
+  // absence of stars, so their profile is worked out first and everything
+  // above is drawn against it.
+  const far: number[] = [];
+  const near: number[] = [];
+  for (let x = 0; x < SCREEN_W; x++) {
+    const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
+    far.push(ridgeAt(wx, 0));
+    near.push(ridgeAt(wx, 1));
+  }
+  // Stars, anchored to azimuth so they wheel as you turn, and denser in a
+  // band across the sky — a night this dark should have a milky way in it.
   for (let y = 2; y < HORIZON - 3; y += 3) {
     for (let x = 0; x < SCREEN_W; x += 7) {
       const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
       const h = hash(wx - (wx % 7), y);
-      if (h < 68) s.px(x + (h % 5), y + ((h >> 3) % 3), h % 9 === 0 ? BW : W);
+      // The band runs at a slant, so turning sweeps along it.
+      const band = Math.abs(y - (14 + Math.sin((wx / SKY_PERIOD) * Math.PI * 2) * 13));
+      const threshold = band < 9 ? 210 - band * 14 : 62;
+      if (h >= threshold) continue;
+      const py = y + ((h >> 3) % 3);
+      if (py > HORIZON - 1 - Math.max(far[x] ?? 0, near[x] ?? 0)) continue;
+      s.px(x + (h % 5), py, h % 9 === 0 ? BW : W);
     }
   }
   // The moon holds its bearing in the sky.
   const d = wrapAngle(MOON_AZIMUTH - yaw);
   if (Math.abs(d) < 1.1) {
-    s.blit(MOON, Math.round(128 + d * SKY_PX_PER_RAD) - 10, 6, 2);
+    const mx = Math.round(128 + d * SKY_PX_PER_RAD) - 10;
+    // A thin halo hugging the disc: thinning outward so it reads as air
+    // around the moon rather than as a panel pasted behind it.
+    for (let hy = -4; hy <= 26; hy++) {
+      for (let hx = -6; hx <= 28; hx++) {
+        const n = Math.sqrt((hx - 11) ** 2 / 210 + (hy - 11) ** 2 / 175);
+        if (n > 1 || n < 0.62) continue;
+        if (hash(mx + hx, hy * 3) > 340 * (1 - n)) continue;
+        s.px(mx + hx, 6 + hy, W);
+      }
+    }
+    s.blit(MOON, mx, 6, 2);
+  }
+  // The far range: a moonlit slope, drawn as a flank that thins downward.
+  // A crest line alone is a wire strung across the sky — hills only read as
+  // land when the ground below the crest has some light on it.
+  for (let x = 0; x < SCREEN_W; x++) {
+    const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
+    const crest = HORIZON - 1 - Math.round(far[x]);
+    for (let y = crest; y < HORIZON; y++) {
+      const down = (y - crest) / Math.max(1, HORIZON - crest);
+      const lit = y === crest ? 880 : 130 * (1 - down) ** 2;
+      if (hash(wx, y * 7 + 11) < lit) s.px(x, y, W);
+    }
+  }
+  // The near range in front of it, unlit: a black mass that eats the far
+  // slope. Its crest goes on last of all, after the haze — see drawCrests.
+  for (let x = 0; x < SCREEN_W; x++) {
+    const crest = HORIZON - 1 - Math.round(near[x]);
+    for (let y = crest; y < HORIZON; y++) s.px(x, y, K);
   }
   // A distant copse made from individual trunks and branches. It shares the
   // sky's azimuth, so it turns continuously instead of sliding as a pasted
-  // image. White deadwood gives the open moor its reference-sheet silhouette.
+  // image.
+  //
+  // Sparse on purpose, and rooted on the near ridge rather than on the
+  // horizon row: a continuous picket of white deadwood along the skyline is
+  // the same value and the same band as the hills behind it, and the two
+  // together read as one strip of noise. A few trees standing against the
+  // sky on a hilltop are worth more than forty in a row.
   for (let x = -5; x < SCREEN_W + 5; x += 8) {
     const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
     const cell = wx - (wx % 8);
     const t = hash(cell, 1313);
-    if (t >= (dead ? 790 : 610)) continue;
+    if (t >= (dead ? 420 : 210)) continue;
     const tx = x + (t % 5) - 2;
     const th = 8 + (t % (dead ? 15 : 11));
     const ink = dead || t % 4 !== 0 ? W : G;
+    // Stand them on the ridge the eye reads as the near skyline.
+    const foot =
+      HORIZON - 1 - Math.round(near[Math.max(0, Math.min(SCREEN_W - 1, tx))] ?? 0);
     for (let k = 0; k < th; k++) {
-      if (k < 3 || ((k + t) & 3) !== 0) s.px(tx, HORIZON - 1 - k, ink);
+      if (k < 3 || ((k + t) & 3) !== 0) s.px(tx, foot - k, ink);
     }
     for (let k = 4; k < th - 1; k += 4) {
       const reach = 1 + ((t >> (k % 8)) & 3);
-      const by = HORIZON - 1 - k;
+      const by = foot - k;
       for (let arm = 1; arm <= reach; arm++) {
         s.px(tx - arm, by - Math.floor(arm / 2), ink);
         if ((t + k) % 3 !== 0) s.px(tx + arm, by - Math.ceil(arm / 2), ink);
       }
     }
   }
-  // Broken horizon line and low scrub, azimuth-anchored.
+  // Low scrub catching the light along the foot of the near ridge. The old
+  // broken horizon line has gone with it: the ridge crest IS the skyline
+  // now, and two skylines a few pixels apart only ever read as one smear.
   for (let x = 0; x < SCREEN_W; x++) {
     const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
-    if (((wx >> 2) & 1) === 0 && hash(wx, 59) < 700) s.px(x, HORIZON - 1, skyline);
     const t = hash(wx - (wx % 23), 777);
-    if (t < 160) {
-      const tx = (t % 19) + wx - (wx % 23);
-      if (tx === wx) {
-        const th = 3 + (t % 3);
-        for (let k = 0; k < th; k++) s.px(x, HORIZON - 2 - k, skyline);
-        s.px(x - 1, HORIZON - 2 - th, skyline);
-        s.px(x + 1, HORIZON - 1 - th + (t % 2), skyline);
-      }
-    }
+    if (t >= 200) continue;
+    const tx = (t % 19) + wx - (wx % 23);
+    if (tx !== wx) continue;
+    const th = 2 + (t % 3);
+    for (let k = 0; k < th; k++) s.px(x, HORIZON - 2 - k, skyline);
+    s.px(x + 1, HORIZON - 1 - th + (t % 2), skyline);
   }
 }
 
@@ -159,6 +240,76 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
     }
   }
   return ley;
+}
+
+/**
+ * Distance haze over the far ground: ink taken AWAY toward the horizon.
+ *
+ * The moor never had a depth cue — a stone at eight hundred units was drawn
+ * in the same white at the same weight as one at eighty, so everything far
+ * away collected into a single band of noise along the skyline, and no
+ * amount of redrawing the individual sprites could fix it.
+ *
+ * The instinct is to lay pale mist over the far field, and on paper that is
+ * what you would do. On a black screen it is exactly wrong: the ground is
+ * ink on unlit glass, so adding white brings the distance FORWARD. Things
+ * recede here by being eaten, until the far moor is more black than moor.
+ *
+ * Runs after the billboards, so distant stones thin out with the ground they
+ * stand on. The leyline is exempt: it is the one thing on the moor that is
+ * light rather than paint, and it should still reach the horizon.
+ */
+function drawHaze(s: Screen, cam: CameraState, t: number): void {
+  const { fx, fy } = forward(cam.yaw);
+  const { ex, ey } = eyeOf(cam);
+  const eyeY = eyeHeight(cam);
+  const drift = t * 6;
+  // Starts ABOVE the horizon row. Billboards stand on the ground but reach
+  // up past it, so a haze that began at the horizon left the top half of
+  // every distant stone untouched — a picket of bright white heads along the
+  // skyline with cleared moor underneath, which was worse than no haze.
+  for (let sy = HORIZON - 12; sy < HORIZON + 30; sy++) {
+    const depth = Math.max(0.5, sy - HORIZON);
+    const z = (eyeY * FOCAL) / depth;
+    const above = sy < HORIZON;
+    const band = above ? 1 : 1 - (sy - HORIZON) / 30;
+    // Gentler above the horizon than below it. Anything reaching over the
+    // skyline is tall, and tall things — the keep, a trilithon — are what
+    // the player is navigating by. Thinning them reads as distance; eating
+    // them outright loses the destination.
+    const eaten = above ? 330 : band ** 1.6 * 980;
+    if (eaten < 8) continue;
+    const rowBase = sy * SCREEN_W;
+    for (let sx = 0; sx < SCREEN_W; sx++) {
+      const colour = s.fb[rowBase + sx];
+      if (colour === K || colour === C || colour === BC) continue;
+      const l = ((sx - 128) * z) / FOCAL;
+      const wx = ex + fx * z + fy * l + drift;
+      const wy = ey + fy * z - fx * l;
+      // Banks of thicker air, so the haze has shape instead of being an even
+      // wash — some hollows swallow their stones, some ridges keep theirs.
+      const bank = hash(Math.floor(wx / 110), Math.floor(wy / 300));
+      const local = eaten * (0.55 + (bank / 1000) * 0.9);
+      if (hash(Math.floor(wx / 2), Math.floor(wy / 7)) < local) {
+        s.fb[rowBase + sx] = K;
+      }
+    }
+  }
+}
+
+/**
+ * The near skyline, laid over the haze that has just eaten everything else
+ * in that band. The ridge is the one edge in the picture that has to stay
+ * hard: it is what tells the eye where the land stops and the sky starts,
+ * and a crest chewed by its own atmosphere reads as a smudge.
+ */
+function drawCrests(s: Screen, yaw: number, dead: boolean): void {
+  const scroll = Math.round(yaw * SKY_PX_PER_RAD);
+  for (let x = 0; x < SCREEN_W; x++) {
+    const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
+    const crest = HORIZON - 1 - Math.round(ridgeAt(wx, 1));
+    if (((wx >> 1) & 1) === 0 || hash(wx, 407) < 500) s.px(x, crest, dead ? W : BW);
+  }
 }
 
 // --------------------------------------------------------------------- hero
@@ -502,6 +653,8 @@ export function renderFrame(
   ];
   jobs.sort((a, b) => b.z - a.z);
   for (const j of jobs) j.paint(s);
+  drawHaze(s, cam, t);
+  drawCrests(s, cam.yaw, cam.x < DEAD_WOOD_X);
   if (lightning && t < lightning.until) drawLightning(s, cam, t, lightning);
   drawOverlay(s, hud, t, overlay, cam);
 }

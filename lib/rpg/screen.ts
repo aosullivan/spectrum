@@ -51,6 +51,8 @@ export class Screen {
   palette: PaletteTable = PALETTE_RGB;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly image: ImageData;
+  /** Scratch histogram for the minifying blit; reused to stay allocation-free. */
+  private readonly tally = new Uint16Array(16);
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -124,8 +126,18 @@ export class Screen {
     const h = Math.max(1, Math.round(dh));
     const x0 = Math.round(bx - w / 2);
     const y0 = Math.round(by - h);
+    // Shrinking by more than a little, one source pixel per destination pixel
+    // is the wrong question to ask: a skeleton drawn from bone-wide white
+    // lines lands its samples in the gaps and disappears, while the pixels
+    // that do survive are whichever ones the rounding happened to pick. Below
+    // this ratio each destination pixel takes a vote of the source block it
+    // covers instead — thin work thickens into a silhouette rather than
+    // dissolving into speckle, and the result stops crawling as the sprite
+    // scales.
+    const sampled = spr.w > w * 1.3 && spr.h > h * 1.3;
     for (let dy = 0; dy < h; dy++) {
       const sy = Math.min(spr.h - 1, Math.floor((dy * spr.h) / h));
+      const sy1 = Math.min(spr.h, Math.max(sy + 1, Math.ceil(((dy + 1) * spr.h) / h)));
       const py = y0 + dy;
       for (let dx = 0; dx < w; dx++) {
         const px = x0 + dx;
@@ -133,10 +145,45 @@ export class Screen {
         if (dither === 1 && ((px + py) & 1) !== 0) continue;
         if (dither === 2 && ((px & 1) !== 0 || (py & 1) !== 0)) continue;
         const sx = Math.min(spr.w - 1, Math.floor((dx * spr.w) / w));
-        const colour = spr.data[sy * spr.w + sx];
+        let colour = spr.data[sy * spr.w + sx];
+        if (sampled) {
+          const sx1 = Math.min(spr.w, Math.max(sx + 1, Math.ceil(((dx + 1) * spr.w) / w)));
+          colour = this.vote(spr, sx, sx1, sy, sy1);
+        }
         if (colour !== T) this.px(px, py, tint ?? colour);
       }
     }
+  }
+
+  /**
+   * The commonest opaque colour in a source block, or T when too little of
+   * the block is covered to be worth drawing. The coverage threshold is what
+   * decides how a shrinking sprite dies: too high and line art evaporates,
+   * too low and every distant creature bloats into the same blob.
+   */
+  private vote(spr: Sprite, x0: number, x1: number, y0: number, y1: number): number {
+    const counts = this.tally;
+    counts.fill(0);
+    let opaque = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const c = spr.data[y * spr.w + x];
+        if (c === T) continue;
+        counts[c]++;
+        opaque++;
+      }
+    }
+    const total = (x1 - x0) * (y1 - y0);
+    if (opaque * 4 < total) return T;
+    let best = T;
+    let bestCount = 0;
+    for (let c = 0; c < 16; c++) {
+      if (counts[c] > bestCount) {
+        bestCount = counts[c];
+        best = c;
+      }
+    }
+    return best;
   }
 
   /**
