@@ -1,9 +1,9 @@
 // The look flags. The renderer consults this mutable singleton so aesthetic
 // variants can be toggled per frame — from a grab script or a debug key —
 // without forking the drawing code. The defaults are the moonlit night key
-// over Relief, adopted 2026-08-15 from the graveyard-concept round
-// (superseding bare Relief and Dusk, both adopted earlier the same day);
-// the older looks survive as presets for A/B.
+// over Relief with the peopled skyline ring, adopted 2026-08-15 from the
+// graveyard-concept round (superseding bare Relief and Dusk, both adopted
+// earlier the same day); the older looks survive as presets for A/B.
 //
 // Two dials from the first prototype round — undergrowth cover and the
 // banded distance fade — retired in the merge with main's dither-shading
@@ -28,6 +28,16 @@ export type AttributeMode = "8x8" | "8x1" | "off";
  */
 export type NightMode = "off" | "sky" | "meadow" | "moonlit";
 
+/**
+ * The skyline ring (design law two made visible): sites beyond their draw
+ * range keep a silhouette on the horizon at their true bearing, sized by
+ * true distance. "sites" draws the real places only; "peopled" adds
+ * azimuth-anchored ruin fragments and lone menhirs between them, so any
+ * turn of the camera sweeps something past. The keep is exempt — its
+ * distant billboard already draws at any range.
+ */
+export type SkylineMode = "off" | "sites" | "peopled";
+
 export interface Look {
   /** Bare ground floors at a deep earth tone (palette index 8), not black. */
   earth: boolean;
@@ -43,6 +53,7 @@ export interface Look {
   /** Rolling value-noise relief; ridges occlude and stand against the sky. */
   hills: boolean;
   night: NightMode;
+  skyline: SkylineMode;
 }
 
 /** The look as first shipped: void-black moor and the 8x8 clash. */
@@ -53,6 +64,7 @@ const CLASSIC: Look = {
   ramps: false,
   hills: false,
   night: "off",
+  skyline: "off",
 };
 
 /** Earth-floored ground, horizon glow, 8x1 weave. */
@@ -63,6 +75,7 @@ const DUSK: Look = {
   ramps: false,
   hills: false,
   night: "off",
+  skyline: "off",
 };
 
 /** Dusk under ULAplus value ramps, standing on the rolling heightfield. */
@@ -74,7 +87,14 @@ const RELIEF: Look = { ...DUSK, ramps: true, hills: true };
  */
 const MOONLIT_NIGHT: Look = { ...RELIEF, night: "moonlit" };
 
-export const LOOK: Look = { ...MOONLIT_NIGHT };
+/**
+ * The moonlit night with the peopled skyline ring: far sites hold their
+ * bearing on the horizon, with ruin stubs and lone menhirs between them.
+ * Adopted 2026-08-15, the same round as the night key.
+ */
+const RINGED_NIGHT: Look = { ...MOONLIT_NIGHT, skyline: "peopled" };
+
+export const LOOK: Look = { ...RINGED_NIGHT };
 
 export function setLook(look: Partial<Look>): void {
   Object.assign(LOOK, look);
@@ -97,4 +117,6 @@ export const LOOK_PRESETS: Record<string, Look> = {
   nightsky: { ...RELIEF, night: "sky" },
   nightmeadow: { ...RELIEF, night: "meadow" },
   nightmoonlit: { ...MOONLIT_NIGHT },
+  skysites: { ...MOONLIT_NIGHT, skyline: "sites" },
+  skypeopled: { ...RINGED_NIGHT },
 };

@@ -150,6 +150,13 @@ export class Screen {
    * changing it repaints everything already drawn and nothing has to be redrawn.
    */
   palette: PaletteTable = PALETTE_RGB;
+  /**
+   * Topmost ground row per column — where land meets sky. The flat renderer
+   * leaves it at HORIZON (clear() resets it); the relief march records each
+   * column's crest, so horizon dressing (the skyline ring) can stand on the
+   * hills instead of being swallowed by them.
+   */
+  readonly horizonRow = new Int16Array(SCREEN_W);
   private readonly ctx: CanvasRenderingContext2D;
   private readonly image: ImageData;
   /** Scratch histogram for the minifying blit; reused to stay allocation-free. */
@@ -173,6 +180,7 @@ export class Screen {
   clear(colour = K): void {
     this.fb.fill(colour);
     this.groundZ = null;
+    this.horizonRow.fill(HORIZON);
   }
 
   px(x: number, y: number, colour: number): void {
