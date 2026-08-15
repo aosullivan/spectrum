@@ -3,6 +3,7 @@
 // keep their footing. Height is a pure function of world position — the same
 // determinism rule as the rest of the terrain.
 
+import { HERMITAGE_POS, HERMITAGE_R } from "@/lib/rpg/hermitage";
 import { LOOK } from "@/lib/rpg/look";
 import { hash } from "@/lib/rpg/screen";
 import {
@@ -38,6 +39,7 @@ const APRONS: ReadonlyArray<{ x: number; y: number; r0: number; r1: number }> = 
   { x: GROVE_POS.x, y: GROVE_POS.y, r0: GROVE_R + 30, r1: GROVE_R + 150 },
   { x: HENGE_POS.x, y: HENGE_POS.y, r0: 250, r1: 390 },
   { x: CIRCLE_POS.x, y: CIRCLE_POS.y, r0: 120, r1: 210 },
+  { x: HERMITAGE_POS.x, y: HERMITAGE_POS.y, r0: HERMITAGE_R + 40, r1: HERMITAGE_R + 170 },
 ];
 
 function smooth01(t: number): number {

@@ -93,12 +93,30 @@ const HENGE_R = 210;
 // ------------------------------------------------------------------ terrain
 
 /**
- * Biome ground ramps, dark to light. Every one starts at black: the moor is
- * lit by nothing but the leyline, and shadow is the ground's resting state.
+ * Biome ground ramps, dark to light. The field and the dither above them
+ * never change; the look only changes what darkness is made of. Classic
+ * starts at black — the moor lit by nothing but the leyline, shadow as the
+ * ground's resting state. The earth look floors it at the region's earth
+ * tone instead. The ULAplus look walks the palette's soil rows (16..19)
+ * up into grass, so far ground fades to dark soil rather than to void.
  * Steps are neighbours in tone, so a cell shaded between two of them holds
  * exactly two colours and survives the attribute pass unaltered.
  */
 const GROUND_RAMP: Ramp = [K, K, G, BG];
+const GROUND_RAMP_EARTH: Ramp = [E, E, G, BG];
+const GROUND_RAMP_ULAPLUS: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 1,
+  RAMP_G0 + 2,
+  G,
+  BG,
+];
+
+/** The ground ramp the current look shades through. */
+export function groundRamp(): Ramp {
+  if (LOOK.ramps) return GROUND_RAMP_ULAPLUS;
+  return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
+}
 
 /**
  * Smooth 0..1 crossing between two world coordinates. The bands used to
@@ -126,38 +144,11 @@ function band(v: number, a: number, b: number): number {
 const MAT_DENSITY = 1.05;
 
 /**
- * What bare ground is made of, per look: void black (classic), the flat
- * earth tone (dusk), or — under the ULAplus ramps — a mottled value ramp,
- * heather-dark to moss-lit, with a lit verge where the leyline's light
- * spills onto the soil beside it. The mat's K returns resolve through this
- * in the renderer, so the ground keeps one source of truth for "nothing
- * grows here" and the looks only disagree about what that looks like.
- */
-export function bareGround(wx: number, wy: number): number {
-  if (!LOOK.ramps) return LOOK.earth ? E : K;
-  const ix = Math.floor(wx);
-  const iy = Math.floor(wy);
-  // Broad moisture clumps set the value; sparse lit blades sit proud.
-  const m = hash(ix >> 2, iy >> 2);
-  let step = m < 240 ? 2 : m < 700 ? 1 : 0;
-  if (hash(ix, iy ^ 0xabc) < 28) step = 3;
-  const ax = Math.abs(wx);
-  if (wy < KEEP_POS.y && ax < 30) step += ax < 14 ? 2 : 1;
-  return RAMP_G0 + Math.min(3, step);
-}
-
-/** True over the sacred pool's still water — the one true black in the world. */
-export function inPool(wx: number, wy: number): boolean {
-  const dx = wx - GROVE_POS.x;
-  const dy = wy - GROVE_POS.y;
-  return dx * dx + dy * dy < POOL_R * POOL_R;
-}
-
-/**
  * Ground colour at a world point, or K for bare dark earth.
- * The look: black dominates; the ground is *shaded* rather than stippled —
- * a smooth lushness field resolved into two neighbouring ramp colours by an
- * ordered dither. The cyan leyline runs north along x=0 to the keep gate.
+ * The look: the ground is *shaded* rather than stippled — a smooth lushness
+ * field resolved into two neighbouring ramp colours by an ordered dither,
+ * darkness itself set by the look's ramp (see groundRamp). The cyan leyline
+ * runs north along x=0 to the keep gate.
  *
  * `footprint` is how many world units one screen pixel spans at this depth —
  * distant samples widen thin features (the leyline must reach the horizon)
@@ -183,9 +174,10 @@ export function groundColour(
   const iy = Math.floor(wy);
 
   // --- the sacred pool: black glass under the moon ---
-  // Still water is not painted water. It is the one true black in the world
-  // (the renderer's soil-fill leaves it alone — see inPool), and everything
-  // it says is laid ON the black: a moon-glade of broken glitter running
+  // Still water is not painted water. It is deliberate black — K returned
+  // here passes through every look untouched, unlike the mat's darkness,
+  // which the look's ramp turns to soil — and everything the water says is
+  // laid ON the black: a moon-glade of broken glitter running
   // toward the moon's bearing, single star-glints, two thin rings widening
   // from where the lady stands, and lily pads rafted near the shore. The
   // old look — a solid bright rim around a 50% blue checkerboard — read as
@@ -277,28 +269,32 @@ export function groundColour(
   }
 
   // --- the leyline: bright core, dithered fringe, shining to the horizon ---
+  // The dark halves of the core's breaks and the fringe dither never return
+  // black outright: they fall through to the mat, so the gaps in the light
+  // show the turf beneath it — on the looks whose ground is soil rather than
+  // void, a hard K here read as a burnt strip beside the light.
   const ax = Math.abs(wx);
   if (wy < KEEP_POS.y) {
     const core = Math.max(1.6, footprint * 0.7);
     // Broken along its length near to hand. Walk along the vein rather than
     // across it and a solid core lies over the whole near floor as one flat
-    // cyan slab; dashed, it reads as light coming up through the turf. The
-    // dark halves of the breaks and fringes stay K on purpose: the renderer
-    // resolves them through bareGround, so under the earth and ramp looks
-    // the light sits on soil instead of on a burnt black strip.
+    // cyan slab; dashed, it reads as light coming up through the turf.
     if (ax < core) {
       if (footprint > 3) return BC;
       // Broken irregularly, not on a modulo: a strict repeat up the middle
       // of the screen reads as a chain or a ladder rather than as light.
-      if (hash(ix, iy) > 660) return K;
-      return (iy & 3) === 0 ? BC : C;
-    }
-    if (ax < core + 3.4) return (ix + iy) % 2 === 0 ? C : K;
-    if (ax < core + 6.4) return hash(ix, iy) < 140 ? C : K;
-    // And a wide, thinning spill either side: the ley is the one light source
-    // on the moor, so the ground near it should know about it. Sparse enough
-    // that it never competes with the core it is cast from.
-    if (ax < core + 30 && hash(ix, iy + 77) < 120 * (1 - (ax - core - 6.4) / 24)) {
+      if (hash(ix, iy) <= 660) return (iy & 3) === 0 ? BC : C;
+    } else if (ax < core + 3.4) {
+      if ((ix + iy) % 2 === 0) return C;
+    } else if (ax < core + 6.4) {
+      if (hash(ix, iy) < 140) return C;
+    } else if (
+      // And a wide, thinning spill either side: the ley is the one light
+      // source on the moor, so the ground near it should know about it.
+      // Sparse enough that it never competes with the core it is cast from.
+      ax < core + 30 &&
+      hash(ix, iy + 77) < 120 * (1 - (ax - core - 6.4) / 24)
+    ) {
       return C;
     }
   }
@@ -365,7 +361,7 @@ export function groundColour(
     return W;
   }
 
-  return rampColour(GROUND_RAMP, level * far, sx, sy);
+  return rampColour(groundRamp(), level * far, sx, sy);
 }
 
 // ------------------------------------------------------------------ features
