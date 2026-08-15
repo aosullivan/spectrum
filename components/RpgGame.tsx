@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Game, emptyInput, type InputState } from "@/lib/rpg/game";
-import { LOOK } from "@/lib/rpg/look";
+import { LOOK, setLook } from "@/lib/rpg/look";
 import { SCREEN_H, SCREEN_W, Screen } from "@/lib/rpg/screen";
 
 const STEP = 1 / 60;
@@ -62,6 +62,12 @@ export function RpgGame() {
     };
 
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
+      // V drops back to the four-step ramps the Relief look shipped with,
+      // for comparing the shading against itself without a rebuild.
+      if (down && e.code === "KeyV") {
+        setLook({ shades: !LOOK.shades });
+        return;
+      }
       if (down && e.code === "KeyC") {
         setCrt((v) => {
           crtRef.current = !v;
@@ -70,9 +76,9 @@ export function RpgGame() {
         return;
       }
       // The key the world is lit by. LOOK is read afresh every frame, so
-      // flipping the flag is the whole of the switch.
+      // flipping it here is the whole of the switch.
       if (down && !e.repeat && e.code === "KeyN") {
-        LOOK.daylight = !LOOK.daylight;
+        setLook({ key: LOOK.key === "day" ? "moonlit" : "day" });
         return;
       }
       // Commands are edge-triggered: the game consumes them and key-repeat

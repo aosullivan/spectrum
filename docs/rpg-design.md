@@ -12,30 +12,37 @@ but runs on a modern TypeScript engine at 60fps.
 ## The two laws
 
 1. **Looks real, runs free.** Every frame must be plausible Spectrum-family output:
-   256×192 logical pixels, the 15-colour palette for sprites, HUD and light, plus
-   ULAplus-fiction terrain rows — per-region 4-step ground and sky value ramps
-   (palette 16–23) — background art limited to 2 colours per 8×1 attribute strip
-   (the Timex hi-colour fiction), presented through subtle CRT glass by default
-   (toggleable). Each region authors those eight rows **twice**, once per key —
-   night and day are the same world under two lights, and only the terrain rows
-   move: the sixteen ULA words are paint and hold at every hour. Amended from
-   8×8 cells / 15 colours flat with the Dusk look, then to the Relief look
-   (ramps + rolling heightfield + CRT), both 2026-08-15, then to the two keys
-   (2026-08-15). But the
-   engine is modern TS — unlimited memory, smooth 60fps, real floating-point math.
-   The Z80 emulator elsewhere in this repo is not involved.
+   256×192 logical pixels, the 15-colour palette for everything that is *paint* —
+   sprites and HUD — plus ULAplus-fiction rows for everything that is *light*:
+   per-region value ramps for ground, sky, stone, foliage and ley-light, and one
+   dim rung under each hue, 63 entries of ULAplus's 64. Background art is limited
+   to 2 colours per 8×1 attribute strip (the Timex hi-colour fiction), presented
+   through subtle CRT glass by default (toggleable). Amended from 8×8 cells /
+   15 colours flat with the Dusk look, then to the Relief look (4-step ramps at
+   palette 16–23 + rolling heightfield + CRT), then to the Shades look (the ramps
+   widened and three more families added), then to the moonlit night key (navy
+   sky-anchor values, three-magnitude starfield, all-soil ground mat), then to
+   two keys — the same anchors authored a second time for daylight, so night
+   and day are one world under two lights — all 2026-08-15. But the engine is
+   modern TS — unlimited memory, smooth 60fps,
+   real floating-point math. The Z80 emulator elsewhere in this repo is not
+   involved.
 2. **Open world, honestly.** Free roaming in every direction is a first-class promise.
    Distant landmarks are real places at real bearings: *see a castle on the horizon →
-   walk to it → enter it.* No corridors dressed as worlds.
+   walk to it → enter it.* No corridors dressed as worlds. The horizon honours this
+   (the skyline ring, adopted 2026-08-15): sites beyond their draw range keep a
+   silhouette at their true bearing, sized by true distance, standing where the drawn
+   land meets the sky and dither-fading into their real geometry as you approach —
+   with nameless ruin stubs between them, dressing only, on the ranges' own fiction.
 
 ## Decisions
 
 | Branch | Decision |
 |---|---|
 | Runtime | Modern TS engine; Spectrum display lens. Emulator untouched. |
-| Look | **"Leyline — Relief"** (adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day): a shaded ULAplus world — gradient sky, mottled tonal ground, lit leyline verge — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Flags in `lib/rpg/look.ts`; Dusk and the original void-black look survive as presets. |
-| Key | **Daylight** (2026-08-15, from the user's lit-landscape reference): the sun up over the same Relief world. Ground walks the region's four terrain rows — shadowed earth, turned earth, dry ochre, lit turf — and **no ink at all**: green marks what grows, never what the ground is, which is the same rule the night ramp follows and the only thing that keeps a lush biome from reading as a lawn. Distance blends toward mid-ramp haze rather than toward the dark, far ranges stand in the sky's own zenith blue under broken snow, and the sky spends its four rows evenly enough that the pale band is a third of it. Slope shading dithers its step, since a whole step of a four-row ramp flattens the hills it is drawing. Stars and moon give way to a sun on the same bearing. `N` toggles; the moonlit night survives whole as the `night` preset and renders bit-identically to what it always did. |
-| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Terrain-only palette rows: index 8 earth tone, 16–19 ground ramp, 20–23 sky ramp, authored once per key. Under the night key black stays black for water and swept earth; under the day key those surfaces take real colours, because black is no longer a surface the sun could produce. Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
+| Look | **"Leyline — Relief, shaded, moonlit"** (Relief adopted 2026-08-15 from rendered prototypes, superseding Dusk from earlier the same day; the shades round adopted later the same day): a shaded ULAplus world — gradient night sky, tonal ground modelled rather than dithered, masonry with lit and shadowed faces, distance spent in value — rolling over a value-noise heightfield whose ridges occlude and stand against the sky, seen through CRT glass. Green line-work and dense undergrowth over it; cyan leylines as roads; floating spirit-mage hero seen from behind. Dragontorc grammar, original content. Amended again 2026-08-15 (the night-key round, held against the graveyard concept frame): the sky anchors carry a just-visible navy night gradient under a deep azimuth-anchored starfield, and the ground mat shades through soil tones only — bright green ink marks growth, never ground. Flags in `lib/rpg/look.ts` (`key` and `skyline` dials, defaults day + peopled; `V` drops back to the four-step ramps in game, `N` swaps the key); Shades, Relief, Dusk and the original void-black look survive as presets. |
+| Key | **Daylight** (2026-08-15, from the user's lit-landscape reference), the default: the sun up over the same shaded relief. A region's weather under a key is nothing but its eight ULAplus anchors, so daylight is four soil tones — shadowed earth, turned earth, dry ochre, lit turf — and four sky tones opening from a banded blue to a pale horizon, and the ladders derive from them as they always did. The mat walks the *same all-soil span moonlit walks*, for the same reason: green marks growth, never ground, which is what keeps a lush biome from reading as a lawn at either hour. Distance blends toward mid-ramp haze rather than toward the dark; far ranges stand solid in the sky's own zenith rung under broken snow, because a distant hill is nearer the colour of the sky than of the ground; stars and moon give way to a sun on the same bearing; and the skyline ring, the near ridge and the copse invert to dark-on-bright, since what reads against pale air is the opposite of what reads against navy. `N` toggles; the moonlit night survives whole as the `night` preset and renders bit-identically to what it always did. |
+| Authenticity | Designed clash — 2 colours per 8×1 strip on backgrounds (Timex hi-colour fiction), enforced as a screen-space pass over the framebuffer; the ULAplus ramps vote in it like any ink; sprites are clash-free. Non-sprite palette rows, all derived from the sixteen colours and four soil / four sky tones a region table authors: index 8 earth tone, then ground (16–26), sky (27–33), stone (34–40), leaf (41–47), ley-light (48–54) and a dim rung per hue (55–62); a key swaps those anchors and re-derives the ladders from them, a ULAplus reload. At night black stays black for water, swept earth and sprite work; under the day key those surfaces take real colours, because black is not a surface the sun can produce. New shades interleave *between* the shipped ones, so the earlier four-step ladders are the even rungs and the look A/Bs against itself. Sites and the leyline road sit on level aprons of the heightfield. Subtle CRT presentation, on by default, toggleable (C). |
 | Camera | Smooth Mode-7-style rotation; hero at your back; the attribute grid stays fixed to the "glass" while the world turns beneath it. |
 | World | Open biomes (woods, plains, moor) + enterable sites (castles, towers, barrow dungeons). Interiors use the same perspective camera with walls closing in. |
 | Mechanics | Action-RPG: real-time aimed bolts + wards + utility spells; lifeforce; inventory and quest items; light stats that can deepen later. |
@@ -55,13 +62,6 @@ contour/tuft terrain floating in black; gnarled leafless trees; a keep silhouett
 a lit gate on the horizon; a cyan leyline running down the path; the hooded hero
 hovering (no legs, robe tapering to a wisp); a dark HUD with a yellow spell name in
 blocky pixel text, a green LIFEFORCE bar, and rune icons.
-
-The daylight key (2026-08-15) was set against a second reference the user
-supplied: a lit landscape in the same idiom — pale cyan horizon under a banded
-blue sky, blue-grey ranges with snow on them, a gold dithered track over green
-turf, water reading blue. That frame is what the day rows, the haze falloff and
-the far-range treatment were tuned to; the night concept above still governs
-everything the sun does not touch.
 
 ## V1 slice (agreed scope)
 
@@ -83,8 +83,12 @@ layout · music direction.
 - Indexed 256×192 framebuffer (Uint8 palette indices) drawn per-frame in TS:
   Mode-7 ground-plane scanlines below the horizon, billboard sprites scaled by 1/z
   and painter-sorted, hero composited last before the HUD.
-- Post passes over the framebuffer: attribute quantize (per 8×8 cell keep the two
-  dominant colours), then present scaled with nearest-neighbour + CRT overlay.
+- Post passes over the framebuffer: attribute quantize (per 8×1 strip keep the two
+  dominant colours, strays snapped to the nearer survivor in RGB), then present
+  scaled with nearest-neighbour + CRT overlay.
+- Shading is one mechanism everywhere: a smooth field resolved into two
+  *neighbouring* ramp rungs by an ordered dither, so a shaded cell holds exactly
+  two colours and survives the clash pass. Distance darkens rather than dithers.
 - Deterministic hash-based terrain detail (no per-frame RNG), authored biome/site
   data over it.
 - Sprites authored as string-array bitmaps (one char per pixel, char→colour legend).

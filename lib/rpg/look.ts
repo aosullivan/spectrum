@@ -1,8 +1,10 @@
 // The look flags. The renderer consults this mutable singleton so aesthetic
 // variants can be toggled per frame — from a grab script or a debug key —
-// without forking the drawing code. The defaults are the Relief look the
-// user adopted on 2026-08-15 (superseding Dusk, adopted earlier the same
-// day); the older looks survive as presets for A/B.
+// without forking the drawing code. The defaults are the day key over Relief
+// with the peopled skyline ring (adopted 2026-08-15, last of four rounds that
+// day: Dusk, Relief, the graveyard-concept night key, then the sun coming up
+// over it); every earlier look survives as a preset for A/B, the moonlit
+// night among them.
 //
 // Two dials from the first prototype round — undergrowth cover and the
 // banded distance fade — retired in the merge with main's dither-shading
@@ -15,6 +17,37 @@
  * still attribute-shaped); "off" drops the clash entirely.
  */
 export type AttributeMode = "8x8" | "8x1" | "off";
+
+/**
+ * The key: what light the world is under. Every mode swaps the ULAplus
+ * anchors a region authored and picks the ladder the ground mat walks —
+ * nothing else in the engine changes, because the anchors are where a
+ * region's weather lives.
+ *
+ * The night gradations (2026-08 round, from the graveyard concept frame) are
+ * how much of the frame's brightness the ground is allowed to keep: "sky"
+ * lifts the zenith to a just-visible navy and fills in the starfield but
+ * leaves the ground alone; "meadow" additionally walks the ground ramp
+ * through the lit-soil step so bright green ink survives only at tuft
+ * crests; "moonlit" removes ink green from the mat entirely.
+ *
+ * "day" (2026-08-15, from the user's lit-landscape reference) is the sun up:
+ * daylight soil and sky anchors, and the same all-soil mat moonlit uses, for
+ * the same reason. Green marks growth, never ground — the one rule that
+ * holds at every hour, and the only thing keeping a lush biome from reading
+ * as a lawn.
+ */
+export type KeyMode = "off" | "sky" | "meadow" | "moonlit" | "day";
+
+/**
+ * The skyline ring (design law two made visible): sites beyond their draw
+ * range keep a silhouette on the horizon at their true bearing, sized by
+ * true distance. "sites" draws the real places only; "peopled" adds
+ * azimuth-anchored ruin fragments and lone menhirs between them, so any
+ * turn of the camera sweeps something past. The keep is exempt — its
+ * distant billboard already draws at any range.
+ */
+export type SkylineMode = "off" | "sites" | "peopled";
 
 export interface Look {
   /** Bare ground floors at a deep earth tone (palette index 8), not black. */
@@ -31,14 +64,15 @@ export interface Look {
   /** Rolling value-noise relief; ridges occlude and stand against the sky. */
   hills: boolean;
   /**
-   * The key: daylight instead of the moonlit night. Each region's palette
-   * installs its day terrain rows (see Mood in palette.ts), the ground walks
-   * a six-step ramp through earth and ochre before it reaches green, distance
-   * fades into haze rather than into the dark, and the sky loses its stars and
-   * its moon for a sun. Only meaningful with `ramps` on — the terrain rows are
-   * where the whole key lives.
+   * The finer ULAplus rows: ground and sky ramps at twice the resolution,
+   * masonry shaded through a stone ladder instead of a white dither, and
+   * distance spent in value — a far billboard steps down its own ramp rather
+   * than being dithered into holes. Needs `ramps`, which is where the ground
+   * and sky ladders come from in the first place.
    */
-  daylight: boolean;
+  shades: boolean;
+  key: KeyMode;
+  skyline: SkylineMode;
 }
 
 /** The look as first shipped: void-black moor and the 8x8 clash. */
@@ -48,7 +82,9 @@ const CLASSIC: Look = {
   attribute: "8x8",
   ramps: false,
   hills: false,
-  daylight: false,
+  shades: false,
+  key: "off",
+  skyline: "off",
 };
 
 /** Earth-floored ground, horizon glow, 8x1 weave. */
@@ -58,28 +94,58 @@ const DUSK: Look = {
   attribute: "8x1",
   ramps: false,
   hills: false,
-  daylight: false,
+  shades: false,
+  key: "off",
+  skyline: "off",
 };
 
 /** Dusk under ULAplus value ramps, standing on the rolling heightfield. */
 const RELIEF: Look = { ...DUSK, ramps: true, hills: true };
 
-/** Relief with the sun up: the same world, lighter, and earthier underfoot. */
-const DAYLIGHT: Look = { ...RELIEF, daylight: true };
+/** Relief with the ramps at full ULAplus depth. */
+const SHADED: Look = { ...RELIEF, shades: true };
 
-export const LOOK: Look = { ...DAYLIGHT };
+/**
+ * Shaded relief under the moonlit night key: navy zenith, deep starfield,
+ * all-soil mat — green ink marks growth, light marks light, the ground
+ * keeps neither.
+ */
+const MOONLIT_NIGHT: Look = { ...SHADED, key: "moonlit" };
+
+/**
+ * The moonlit night with the peopled skyline ring: far sites hold their
+ * bearing on the horizon, with ruin stubs and lone menhirs between them.
+ * Adopted 2026-08-15, the same round as the night key.
+ */
+const RINGED_NIGHT: Look = { ...MOONLIT_NIGHT, skyline: "peopled" };
+
+/**
+ * The same world with the sun up, adopted 2026-08-15 from the user's
+ * lit-landscape reference. It differs from the moonlit night in the anchors
+ * alone: the ground walks the identical all-soil ladder, because the rule
+ * that keeps green off the ground holds at noon exactly as it holds at
+ * midnight.
+ */
+const RINGED_DAY: Look = { ...RINGED_NIGHT, key: "day" };
+
+export const LOOK: Look = { ...RINGED_DAY };
 
 export function setLook(look: Partial<Look>): void {
   Object.assign(LOOK, look);
 }
 
-/**
- * Is the sun up? The whole key lives in the ULAplus terrain rows, so it can
- * only be up on a look that has them — asking this rather than the raw flag
- * keeps the older looks reachable without them sprouting a daylight half.
- */
+/** Is the sun up? Asked wherever night and day want different drawing. */
 export function daylight(): boolean {
-  return LOOK.daylight && LOOK.ramps;
+  return LOOK.key === "day";
+}
+
+/**
+ * Does the ground mat end in soil rather than climbing into ink green? True
+ * under both the keys anyone actually plays in — the moonlit night and the
+ * day — and the reason neither of them can produce a neon field.
+ */
+export function allSoilMat(): boolean {
+  return LOOK.key === "moonlit" || LOOK.key === "day";
 }
 
 /**
@@ -96,6 +162,12 @@ export const LOOK_PRESETS: Record<string, Look> = {
   dusk: { ...DUSK },
   ramps: { ...DUSK, ramps: true },
   relief: { ...RELIEF },
-  night: { ...RELIEF },
-  daylight: { ...DAYLIGHT },
+  shaded: { ...SHADED },
+  nightsky: { ...SHADED, key: "sky" },
+  nightmeadow: { ...SHADED, key: "meadow" },
+  nightmoonlit: { ...MOONLIT_NIGHT },
+  skysites: { ...MOONLIT_NIGHT, skyline: "sites" },
+  skypeopled: { ...RINGED_NIGHT },
+  night: { ...RINGED_NIGHT },
+  day: { ...RINGED_DAY },
 };

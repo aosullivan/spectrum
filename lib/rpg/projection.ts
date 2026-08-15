@@ -2,6 +2,7 @@
 // that is what makes gliding through the keep gate feel continuous rather
 // than like two different games stitched together.
 
+import { LOOK } from "@/lib/rpg/look";
 import { BC, BG, BR, BW, BY, C, K } from "@/lib/rpg/palette";
 import {
   HORIZON,
@@ -18,17 +19,6 @@ export const FOCAL = 110;
 export const CAM_HEIGHT = 26;
 /** How far behind the hero the eye sits. */
 export const CAM_BACK = 32;
-/**
- * Most a billboard may be blown up past the size it was drawn at. Held as a
- * backstop for the pathological case — your face against a stone — rather
- * than as a working limit: at four the cap bit an oak fifty-six units out,
- * which is most of the way across a clearing, and froze the whole approach.
- * The solid megaliths that motivated a cap at all are kept at arm's length
- * by their collision radius long before this, and `blitScaled` softens and
- * thins heavy magnification from 2.6x up, so there is art to look at here.
- */
-const MAX_MAGNIFY = 8;
-
 export interface CameraState {
   x: number;
   y: number;
@@ -97,6 +87,12 @@ export interface Billboard {
   stands?: number;
   /** Radius in world units over which this prop throws warm light. */
   light?: number;
+  /**
+   * Palette colour this thing lays on a polished floor as a vertical
+   * reflection streak. Fires get theirs for free; this is for cold light —
+   * a ley-lit archway mirrored in the flags.
+   */
+  sheen?: number;
   /** Cycled at `fps` when present, for flame flicker and the like. */
   frames?: readonly Sprite[];
   fps?: number;
@@ -176,26 +172,29 @@ export function collectBillboards(
     // shrink: the sprite is drawn upward from its feet, so a frozen height
     // over a descending foot drags the crown of a tree *down* as you walk
     // into it. An oak's top fell forty rows over the last twenty-five units
-    // of its approach when perspective wanted it to climb a hundred. Freeze
-    // the depth instead and the whole billboard freezes together — it stops
-    // resolving, but it never reverses.
+    // of its approach when perspective wanted it to climb a hundred.
     //
-    // Nothing is drawn at more than a few times the size it was drawn at.
-    // Past that there is no more information in the sprite, only bigger
-    // pixels: a forty-by-fourteen fallen sarsen taken to nine times scale
-    // is three hundred and seventy pixels of flat grey with black slabs in
-    // it, which reads as a brick wall rather than as a stone you are
-    // standing beside.
-    const zMagnify = (it.height * FOCAL) / (it.sprite.h * MAX_MAGNIFY);
-    // Keep very large actors framed at interaction range — the same trick,
-    // at whatever distance the caller asked to stop closing.
+    // There is no cap on that height any more, and there cannot be one. With
+    // the foot planted where the ground really is, a billboard's crown sits
+    // at HORIZON + (eyeY - height) * FOCAL / z; hold `h` at any ceiling and
+    // that becomes HORIZON + eyeY * FOCAL / z - ceiling, which *descends* as
+    // you close. Capping the height and planting the foot are the same bug
+    // seen twice. Freezing the foot as well does keep the shape rigid, but
+    // then it stops touching the ground: an oak held from twenty-four units
+    // out ends up hovering thirty-nine pixels in the air by the time you
+    // reach the trunk, which reads as the tree taking off.
+    //
+    // So the near plane is the only limit. `z < 20` above is what stops a
+    // sprite from swallowing the screen, and it is enough on its own.
     const zFramed =
       it.maxScreenHeight !== undefined ? (it.height * FOCAL) / it.maxScreenHeight : 0;
-    const framedAtHud = zFramed > Math.max(z, zMagnify);
-    // Lateral placement stays on the true depth, so a frozen billboard still
-    // tracks its world position as you strafe past it; only its size and its
-    // footing hold still.
-    const zDraw = Math.max(z, zMagnify, zFramed);
+    const framedAtHud = zFramed > z;
+    // Only the framing cap freezes depth, and only ever for the distant keep,
+    // where it engages beyond 800 units — out there 1/z is flat enough that
+    // the foot moves a tenth of a pixel, so nothing lifts off. Lateral
+    // placement stays on the true depth regardless, or a held billboard stops
+    // tracking its world position as you strafe past it.
+    const zDraw = Math.max(z, zFramed);
     let h = (it.height * FOCAL) / zDraw;
     if (it.landmark) {
       h = Math.max(h, 7);
@@ -219,8 +218,8 @@ export function collectBillboards(
     // standing on the flags. `stands` lifts the whole prop to a storey, so
     // battlements on the roof sit at roof height rather than in the mud.
     // Under the relief look everything also stands on its hillside.
-    // On `zDraw`, not `z`: the footing has to freeze on the same depth the
-    // height froze on, or the two disagree and the sprite slides again.
+    // Planted on the true depth: whatever else is held, the foot goes where
+    // the ground is, or the prop floats.
     const baseY =
       groundRow(zDraw, eyeY) -
       (((it.elevate ?? 0) + (it.stands ?? 0) + (terrain ? terrain(it.x, it.y) : 0)) *
@@ -259,7 +258,26 @@ export function collectBillboards(
     //
     // Landmarks never dissolve: they already swap to low-detail LOD art at
     // range, and a dithered castle reads as noise instead of a destination.
-    const dither = it.landmark ? 0 : it.z > 900 ? 2 : it.z > 420 ? 1 : 0;
+    //
+    // With shades on, that distance is spent in value instead: a far tree
+    // steps down the leaf ramp, a far sarsen down the stone ramp, and only
+    // the last band still thins, so the horizon has air in it without the
+    // near-middle distance being eaten into holes. This is the aerial
+    // perspective the black-paper rule allows — light taken away, never pale
+    // haze laid on, which on unlit glass would bring the far field forward.
+    const band = it.z > 1500 ? 3 : it.z > 900 ? 2 : it.z > 420 ? 1 : 0;
+    const dither = it.landmark
+      ? 0
+      : LOOK.shades
+        ? band > 2
+          ? 1
+          : 0
+        : it.z > 900
+          ? 2
+          : it.z > 420
+            ? 1
+            : 0;
+    const shade = LOOK.shades && !it.landmark ? band : 0;
     return {
       z: it.z,
       paint: (s: Screen) => {
@@ -292,7 +310,18 @@ export function collectBillboards(
         if (it.highlight) {
           drawHalo(s, it.sprite, it.screenX, footY, w, it.h, depth, it.z);
         }
-        s.blitScaled(it.sprite, it.screenX, footY, w, it.h, dither, undefined, depth, it.z);
+        s.blitScaled(
+          it.sprite,
+          it.screenX,
+          footY,
+          w,
+          it.h,
+          dither,
+          undefined,
+          depth,
+          it.z,
+          shade,
+        );
         if (it.energy !== undefined) {
           drawEnergyBar(s, it.screenX, footY - it.h - 5, w, it.energy);
         }

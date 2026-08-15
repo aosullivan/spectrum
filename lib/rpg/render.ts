@@ -12,9 +12,24 @@ import {
   textWidth,
 } from "@/lib/rpg/assets";
 import { KEEP_MID, KEEP_NEAR } from "@/lib/rpg/art";
-import { bayer, rampColour, type Ramp } from "@/lib/rpg/dither";
+import { rampColour, type Ramp } from "@/lib/rpg/dither";
 import { LOOK, daylight } from "@/lib/rpg/look";
-import { B, BC, BW, BY, C, G, K, RAMP_G0, RAMP_S0, W } from "@/lib/rpg/palette";
+import {
+  B,
+  BC,
+  BW,
+  BY,
+  C,
+  G,
+  K,
+  R,
+  RAMP_G0,
+  RAMP_S0,
+  RAMP_S_N,
+  W,
+  Y,
+  isLeyLight,
+} from "@/lib/rpg/palette";
 import { terrainHeight } from "@/lib/rpg/terrain";
 import {
   REFERENCE_HERO_BACK,
@@ -33,16 +48,21 @@ import {
   type CameraState,
 } from "@/lib/rpg/projection";
 import { drawPanel, type Blip, type DialPlan } from "@/lib/rpg/panel";
-import { collectFaces } from "@/lib/rpg/structures";
+import { collectFaces, collectLeaf, type FaceDraw } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import {
-  DEAD_WOOD_X,
+  CIRCLE_POS,
+  DOORWAYS,
+  GROVE_POS,
+  HENGE_POS,
   HERMITAGE_BOXES,
   HERMITAGE_POS,
   KEEP_BOXES,
   KEEP_GATE_Y,
   KEEP_POS,
   VILLAGE_POS,
+  bareRampTop,
+  deadness,
   featuresNear,
   groundColour,
   groundLevel,
@@ -68,11 +88,22 @@ function wrapAngle(a: number): number {
 // wyrm to the left, and the keep straight up the leyline.
 const MOON_AZIMUTH = -0.72;
 
+/** Where the sun went down, and where the old woods' afterglow still sits. */
+const EMBER_AZIMUTH = 2.5;
+
 /** Night air thickening toward the horizon. Two steps is all it needs. */
 const SKY_RAMP: Ramp = [K, B];
 
 /** The ULAplus sky rows: a real zenith-to-horizon gradient (see palette.ts). */
-const SKY_RAMP_ULAPLUS: Ramp = [RAMP_S0, RAMP_S0 + 1, RAMP_S0 + 2, RAMP_S0 + 3];
+const SKY_RAMP_ULAPLUS: Ramp = [RAMP_S0, RAMP_S0 + 2, RAMP_S0 + 4, RAMP_S0 + 6];
+
+/**
+ * The same gradient with a step between each pair. Sky is a third of the
+ * frame and almost entirely flat field, so it is where the ordered dither
+ * shows most: four steps over sixty rows leaves three visible bands of weave,
+ * and seven leaves none.
+ */
+const SKY_RAMP_SHADED: Ramp = Array.from({ length: RAMP_S_N }, (_, i) => RAMP_S0 + i);
 
 /**
  * Height of a range of hills above the horizon at an azimuth, in pixels.
@@ -101,10 +132,202 @@ function ridgeAt(wx: number, range: number): number {
   );
 }
 
-function drawSky(s: Screen, yaw: number, dead: boolean): void {
+// ------------------------------------------------------------- skyline ring
+//
+// Design law two made visible (the `skyline` look): a site whose real
+// geometry has culled keeps its place on the horizon — a one-to-two colour
+// silhouette at its TRUE bearing, sized by its true distance, standing on
+// the near ridge like the copse does. Each fades in over a dithered band
+// past its cull range, so the handoff from real geometry never pops. The
+// keep is exempt on purpose: its distant billboard already draws at any
+// range, and two keeps are worse than one.
+
+interface SkySite {
+  x: number;
+  y: number;
+  /** World size of the silhouette mass. */
+  w: number;
+  h: number;
+  /** Range its real geometry stops drawing at — the fade-in starts here. */
+  cull: number;
+  kind: "village" | "henge" | "grove" | "stones" | "hut";
+}
+
+const SKY_SITES: SkySite[] = [
+  { ...VILLAGE_POS, w: 170, h: 46, cull: 850, kind: "village" },
+  { ...HENGE_POS, w: 320, h: 60, cull: 900, kind: "henge" },
+  { ...GROVE_POS, w: 360, h: 78, cull: 900, kind: "grove" },
+  { ...CIRCLE_POS, w: 300, h: 30, cull: 900, kind: "stones" },
+  { ...HERMITAGE_POS, w: 64, h: 34, cull: 700, kind: "hut" },
+];
+
+/**
+ * Column mass with a crest, per-pixel dithered by `fade`. Pale masses are
+ * moonlit stone — a W/K weave dense enough to eat the stars behind it —
+ * with a near-solid crest; dark masses (leafed crowns) are the absence of
+ * stars with a dashed crest.
+ *
+ * By day the polarity inverts, for the same reason it was chosen at night:
+ * these silhouettes stand exactly where the sky is at its palest, so what
+ * reads at 4-10px is whatever contrasts with the air behind them. On navy
+ * that is a pale weave; under a bright horizon it is a dark one, and a
+ * distant site becomes a shape cut out of the light rather than a smear in
+ * it. It takes the ground ladder's darkest rung, which is also what the near
+ * ridge and the copse are made of — one silhouette tone for the whole
+ * skyline.
+ */
+function silhouetteColumn(
+  s: Screen,
+  x: number,
+  foot: number,
+  top: number,
+  fade: number,
+  crest: number,
+  dark = false,
+): void {
+  if (top <= 0) return;
+  const day = daylight();
+  for (let yy = foot - top; yy <= foot; yy++) {
+    if (yy < 2) continue;
+    if (hash(x, yy * 3 + 41) >= fade * 1024) continue;
+    let ink: number;
+    if (day) ink = RAMP_G0;
+    else if (yy === foot - top) ink = hash(x, 883) < 680 ? crest : dark ? K : W;
+    else if (dark) ink = K;
+    else ink = hash(x, yy * 7 + 3) < 540 ? W : K;
+    s.px(x, yy, ink);
+  }
+}
+
+function drawSiteShape(
+  s: Screen,
+  site: SkySite,
+  cx: number,
+  sw: number,
+  sh: number,
+  fade: number,
+): void {
+  const half = sw >> 1;
+  for (let j = -half; j <= half; j++) {
+    const x = cx + j;
+    if (x < 0 || x >= SCREEN_W) continue;
+    const foot = s.horizonRow[x] - 1;
+    let top = 0;
+    let crest = W;
+    let dark = false;
+    switch (site.kind) {
+      case "village": {
+        // Two gabled masses, the second lower, ridge catching the moon.
+        const split = Math.round(sw * 0.42) - half;
+        const block = j < split ? sh : Math.max(2, Math.round(sh * 0.62));
+        const edge = j === -half || j === half || j === split;
+        top = block - (edge ? 1 : 0);
+        break;
+      }
+      case "henge": {
+        // Three trilithons: paired posts under a lintel, sky between.
+        const g = Math.max(4, Math.round(sw / 3));
+        const inGroup = (j + half) % g;
+        const post = inGroup < 2 || inGroup >= g - 2;
+        if (post) top = sh;
+        else if (sh >= 4) {
+          // Lintels hang at the posts' height, not on the ridge. They take
+          // the same polarity as the posts they span (see silhouetteColumn).
+          const ink = daylight() ? RAMP_G0 : W;
+          for (let yy = foot - sh; yy < foot - sh + 2; yy++) {
+            if (yy >= 2 && hash(x, yy * 3 + 41) < fade * 1024) s.px(x, yy, ink);
+          }
+        }
+        break;
+      }
+      case "grove": {
+        // A broadleaf crown: stepped, still leafed — the one green crest.
+        const n = hash(cx + (j >> 2), 313) % 400;
+        top = Math.max(1, Math.round(sh * (0.55 + n / 900)));
+        crest = hash(x, 714) < 560 ? G : W;
+        dark = true;
+        break;
+      }
+      case "stones": {
+        // A ring seen edge-on: pale nubs in a row, sky between them.
+        if ((j + half) % 3 === 0) top = 2 + (hash(cx + j, 515) % 2);
+        break;
+      }
+      case "hut": {
+        top = sh - Math.min(Math.abs(j), 1);
+        break;
+      }
+    }
+    silhouetteColumn(s, x, foot, top, fade, crest, dark);
+  }
+  // A hearth left burning: the one warm pixel on the night skyline.
+  if (site.kind === "village" && sh >= 4 && fade > 0.5) {
+    const hx = cx - (half >> 1);
+    if (hx >= 0 && hx < SCREEN_W) s.px(hx, s.horizonRow[hx] - 2, Y);
+  }
+}
+
+function drawSkylineRing(s: Screen, cam: CameraState): void {
+  if (LOOK.skyline === "off") return;
+  const yaw = cam.yaw;
+  for (const site of SKY_SITES) {
+    const dx = site.x - cam.x;
+    const dy = site.y - cam.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < site.cull) continue;
+    const d = wrapAngle(Math.atan2(dx, dy) - yaw);
+    if (Math.abs(d) > 1.15) continue;
+    const cx = Math.round(128 + d * SKY_PX_PER_RAD);
+    const scale = SKY_PX_PER_RAD / dist;
+    const sh = Math.max(2, Math.min(16, Math.round(site.h * scale)));
+    const sw = Math.max(4, Math.min(34, Math.round(site.w * scale)));
+    const fade = Math.min(1, (dist - site.cull) / 250);
+    drawSiteShape(s, site, cx, sw, sh, fade);
+  }
+  if (LOOK.skyline !== "peopled") return;
+  // Between the real places, ruin the horizon a little: broken wall stubs
+  // and lone menhirs at fixed azimuths, so any turn sweeps something past.
+  // Nameless dressing, same fiction as the ranges behind them.
+  const scroll = Math.round(yaw * SKY_PX_PER_RAD);
+  for (let x = -6; x < SCREEN_W + 6; x += 16) {
+    const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
+    const cell = wx - (wx % 16);
+    const t = hash(cell, 2029);
+    if (t >= 96) continue;
+    const tx = x + (t % 9) - 4;
+    if (tx < 0 || tx >= SCREEN_W) continue;
+    if (t < 66) {
+      // A wall stub, one end still standing a little taller.
+      const rw = 3 + (t % 4);
+      const rh = 2 + ((t >> 2) % 3);
+      for (let j = 0; j < rw; j++) {
+        const x2 = tx + j;
+        if (x2 >= SCREEN_W) break;
+        const top = rh + (j === 0 ? 1 : 0) - ((t >> (j & 7)) & 1);
+        silhouetteColumn(s, x2, s.horizonRow[x2] - 1, top, 1, W);
+      }
+    } else {
+      // A lone menhir: a pale sliver you could walk toward and never reach.
+      const foot = s.horizonRow[tx] - 1;
+      const mh = 3 + (t % 2);
+      for (let yy = foot - mh; yy <= foot; yy++) {
+        if (yy >= 2) s.px(tx, yy, yy === foot - mh ? W : hash(tx, yy * 7 + 3) < 540 ? W : K);
+      }
+    }
+  }
+}
+
+/**
+ * `dead` is how much of the sky the old woods own, 0..1 — a fade rather than
+ * the hard switch at DEAD_WOOD_X it used to be, so the band's own weather
+ * comes up as you walk into it instead of snapping over in one step.
+ */
+function drawSky(s: Screen, cam: CameraState, dead: number): void {
+  const yaw = cam.yaw;
+  const deep = dead > 0.5;
   const day = daylight();
   const scroll = Math.round(yaw * SKY_PX_PER_RAD);
-  const skyline = dead && !day ? W : G;
+  const skyline = deep && !day ? W : G;
   // The sky's ground tone goes down first, so the stars, the ranges and the
   // copse all stand in front of it. Under the ULAplus ramps it is a true
   // zenith-to-horizon gradient through the palette's sky rows; otherwise a
@@ -112,16 +335,17 @@ function drawSky(s: Screen, yaw: number, dead: boolean): void {
   // past a fifth coverage it stops being air and becomes a painted band
   // competing with the horizon.
   if (LOOK.ramps) {
-    // Night air thickens fast and then stays thick, so the gradient is barely
-    // off black until it is nearly down at the land. Daylight distributes the
-    // same four rows far more evenly: the pale band above the horizon is a
-    // third of the sky, not a fringe, and it is most of what makes the picture
-    // read as light.
+    const ramp = LOOK.shades ? SKY_RAMP_SHADED : SKY_RAMP_ULAPLUS;
+    // Night air thickens fast and then stays thick, so the gradient is
+    // barely off its zenith until it is nearly down at the land. Daylight
+    // spends the same rungs far more evenly: the pale band above the horizon
+    // is a third of the sky, not a fringe, and it is most of what makes the
+    // picture read as light.
     const curve = day ? 0.85 : 1.7;
     for (let y = 0; y < HORIZON; y++) {
       const level = Math.pow(y / (HORIZON - 1), curve);
       for (let x = 0; x < SCREEN_W; x++) {
-        s.px(x, y, rampColour(SKY_RAMP_ULAPLUS, level, x, y));
+        s.px(x, y, rampColour(ramp, level, x, y));
       }
     }
   } else if (LOOK.skyGlow) {
@@ -143,35 +367,73 @@ function drawSky(s: Screen, yaw: number, dead: boolean): void {
     const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
     far.push(ridgeAt(wx, 0));
     near.push(ridgeAt(wx, 1));
+    // The ranges are part of the visible skyline: fold their crest into
+    // horizonRow so horizon dressing stands on whatever the eye reads as
+    // the land's edge — these ridges here, the relief's crest when it
+    // climbs higher (the ground pass keeps the minimum).
+    s.horizonRow[x] = Math.min(
+      s.horizonRow[x],
+      HORIZON - 1 - Math.round(Math.max(far[x], near[x])),
+    );
   }
   // Stars, anchored to azimuth so they wheel as you turn, and denser in a
   // band across the sky — a night this dark should have a milky way in it.
-  if (!day) {
-    for (let y = 2; y < HORIZON - 3; y += 3) {
-      for (let x = 0; x < SCREEN_W; x += 7) {
-        const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
-        const h = hash(wx - (wx % 7), y);
-        // The band runs at a slant, so turning sweeps along it.
-        const band = Math.abs(y - (14 + Math.sin((wx / SKY_PERIOD) * Math.PI * 2) * 13));
-        const threshold = band < 9 ? 210 - band * 14 : 62;
-        if (h >= threshold) continue;
-        const py = y + ((h >> 3) % 3);
-        if (py > HORIZON - 1 - Math.max(far[x] ?? 0, near[x] ?? 0)) continue;
-        s.px(x + (h % 5), py, h % 9 === 0 ? BW : W);
+  // The night look deepens the field: a finer grid, three magnitudes with
+  // the faintest in blue, a dust of blue grain along the band, and the odd
+  // great star drawn as a cross — the one light in the sky you could name.
+  const rich = LOOK.key !== "off";
+  const stepX = rich ? 5 : 7;
+  for (let y = 2; y < HORIZON - 3; y += rich ? 2 : 3) {
+    for (let x = 0; x < SCREEN_W; x += stepX) {
+      const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
+      const h = hash(wx - (wx % stepX), y);
+      // The band runs at a slant, so turning sweeps along it.
+      const band = Math.abs(y - (14 + Math.sin((wx / SKY_PERIOD) * Math.PI * 2) * 13));
+      const ceiling = HORIZON - 1 - Math.max(far[x] ?? 0, near[x] ?? 0);
+      const threshold = rich
+        ? band < 11
+          ? 250 - band * 16
+          : 74
+        : band < 9
+          ? 210 - band * 14
+          : 62;
+      if (h >= threshold) {
+        // Stars too faint to resolve: a grain of blue dust in the band.
+        if (rich && band < 10 && hash(wx, y * 13 + 5) < 76 - band * 7) {
+          const dy = y + ((h >> 2) % 2);
+          if (dy <= ceiling) s.px(x + (h % stepX), dy, B);
+        }
+        continue;
+      }
+      const py = y + ((h >> 3) % 3);
+      if (py > ceiling) continue;
+      const px = x + (h % 5);
+      if (!rich) {
+        s.px(px, py, h % 9 === 0 ? BW : W);
+        continue;
+      }
+      s.px(px, py, h % 29 === 0 ? BW : h % 3 === 0 ? W : B);
+      if (h === 0 && py > 2 && py < ceiling - 2) {
+        // A great star: bright heart, four faint points.
+        s.px(px - 1, py, W);
+        s.px(px + 1, py, W);
+        s.px(px, py - 1, W);
+        s.px(px, py + 1, W);
+        s.px(px, py, BW);
       }
     }
   }
-  // Whatever is lighting the world holds its bearing in the sky: the crescent
-  // at night, and by day the sun the far slopes and the water are already lit
-  // from. Both hang at MOON_AZIMUTH, so nothing else about the lighting has to
-  // know which one is up there.
+  // Whatever lights the world holds its bearing in the sky: the crescent at
+  // night, and by day the sun the far slopes and the water are already lit
+  // from. Both hang at MOON_AZIMUTH, so nothing else about the lighting has
+  // to know which one is up there.
   const d = wrapAngle(MOON_AZIMUTH - yaw);
   if (Math.abs(d) < 1.1) {
     const mx = Math.round(128 + d * SKY_PX_PER_RAD) - 10;
     if (day) {
       // A burnt-out disc and the glare around it, thinning to nothing. Drawn
-      // in bright white on a sky that is already pale: the sun reads by being
-      // the one thing with no dither in it at all.
+      // in bright white on a sky that is already pale: the sun reads by
+      // being the one thing up there with no dither in it at all.
       for (let hy = -11; hy <= 11; hy++) {
         for (let hx = -11; hx <= 11; hx++) {
           const r = Math.sqrt(hx * hx + hy * hy);
@@ -196,16 +458,53 @@ function drawSky(s: Screen, yaw: number, dead: boolean): void {
       s.blit(MOON, mx, 6, 2);
     }
   }
-  // The far range: at night a moonlit slope, drawn as a flank that thins
-  // downward. A crest line alone is a wire strung across the sky — hills only
-  // read as land when the ground below the crest has some light on it.
+  // The dying sun. EMBER_DUSK is a table of amber, olive and bone described in
+  // palette.ts as firelight and late sun, and nothing in the band ever emitted
+  // the warm end of it — the wood is bone-white by decision, and the sky over
+  // it was the same cold gradient the moor gets. This is the light those
+  // colours are supposed to be lit BY, put back on the one bearing it can come
+  // from, banked low in the west where the sun went.
   //
-  // By day the range is solid instead, painted in the sky's own zenith row.
+  // It may be warm and bright this low in the frame for the same reason the
+  // leyline may: it is a light SOURCE, and everything stands in front of it.
+  // Pale haze over the same rows does the opposite — on black paper, adding
+  // light to the far field makes it the brightest thing on screen and drags it
+  // forward, which is how the moor's earlier attempt at horizon mist failed.
+  if (dead > 0.02) {
+    const centre = 128 + wrapAngle(EMBER_AZIMUTH - yaw) * SKY_PX_PER_RAD;
+    for (let x = 0; x < SCREEN_W; x++) {
+      // Wide and low. Narrower than this it reads as a second moon; and with
+      // the falloff squared it rises to a point over the bearing and becomes
+      // a mountain standing in the sky, so the profile is deliberately flatter
+      // than linear across the middle and only steepens at the edges.
+      const across = 1 - Math.min(1, Math.abs(x - centre) / 104);
+      if (across <= 0) continue;
+      // Banked on the near ridge rather than on the horizon row: everything
+      // from that crest down is about to be filled solid black as the near
+      // range's mass, so a glow drawn at the horizon is painted out entirely.
+      // Sitting above the crest also puts the hills in front of it, black
+      // against the light, which is what a sunset behind a ridge looks like.
+      const base = HORIZON - 1 - Math.round(near[x]);
+      const reach = 16 * Math.pow(across, 0.7) * dead;
+      for (let y = base; y > base - reach; y--) {
+        const up = (base - y) / Math.max(1, reach);
+        // Never solid even at its heart — about two-thirds cover along the
+        // skyline, falling away fast, so it stays air rather than paint.
+        if (hash(x * 3, y * 7 + 5) > 660 * (1 - up) ** 1.8) continue;
+        s.px(x, y, up < 0.22 ? BY : up < 0.62 ? Y : R);
+      }
+    }
+  }
+  // The far range: at night a moonlit slope, drawn as a flank that thins
+  // downward. A crest line alone is a wire strung across the sky — hills
+  // only read as land when the ground below the crest has some light on it.
+  //
+  // By day the range is solid instead, painted in the sky's own zenith rung.
   // That is the whole of aerial perspective in one line: distance is not
-  // darker, it is *bluer and flatter*, and a far hill is nearer to the colour
-  // of the sky above it than to anything on the ground. Standing two ramp
-  // steps under the pale air at the horizon, it separates cleanly, and a
-  // broken white cap gives the tops their snow.
+  // darker, it is *bluer and flatter*, and a far hill is nearer the colour
+  // of the sky above it than anything on the ground. Standing several rungs
+  // under the pale air at the horizon it separates cleanly, and a broken
+  // white cap gives the tops their snow.
   for (let x = 0; x < SCREEN_W; x++) {
     const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
     const crest = HORIZON - 1 - Math.round(far[x]);
@@ -229,16 +528,16 @@ function drawSky(s: Screen, yaw: number, dead: boolean): void {
   // after the billboards it lays a dashed white rule across the treetops.
   //
   // Black at night, because an unlit hill IS the absence of stars. By day it
-  // takes the bottom of the ground ramp instead: the same shadowed earth the
-  // near moor's hollows are made of, which reads as a wooded ridge under the
-  // sun rather than as a hole cut in the sky.
+  // takes the bottom of the ground ladder instead: the same shadowed earth
+  // the near moor's hollows are made of, which reads as a wooded ridge under
+  // the sun rather than as a hole cut in the sky.
   const mass = day ? RAMP_G0 : K;
   for (let x = 0; x < SCREEN_W; x++) {
     const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
     const crest = HORIZON - 1 - Math.round(near[x]);
     for (let y = crest; y < HORIZON; y++) s.px(x, y, mass);
     if (((wx >> 1) & 1) === 0 || hash(wx, 407) < 500) {
-      s.px(x, crest, dead && !day ? W : BW);
+      s.px(x, crest, deep && !day ? W : BW);
     }
   }
   // A distant copse made from individual trunks and branches. It shares the
@@ -254,12 +553,12 @@ function drawSky(s: Screen, yaw: number, dead: boolean): void {
     const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
     const cell = wx - (wx % 8);
     const t = hash(cell, 1313);
-    if (t >= (dead ? 420 : 210)) continue;
+    if (t >= (deep ? 420 : 210)) continue;
     const tx = x + (t % 5) - 2;
-    const th = 8 + (t % (dead ? 15 : 11));
+    const th = 8 + (t % (deep ? 15 : 11));
     // White deadwood against a black sky; by day the polarity flips and the
     // same trees are dark shapes standing on a bright one.
-    const ink = day ? mass : dead || t % 4 !== 0 ? W : G;
+    const ink = day ? mass : deep || t % 4 !== 0 ? W : G;
     // Stand them on the ridge the eye reads as the near skyline.
     const foot =
       HORIZON - 1 - Math.round(near[Math.max(0, Math.min(SCREEN_W - 1, tx))] ?? 0);
@@ -325,7 +624,7 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
       const colour = groundColour(wx, wy, footprint, t, sx, sy, far);
       if (colour === K) continue;
       // Leyline light never fades with distance and skips the clash pass.
-      if (colour === BC || colour === C) {
+      if (isLeyLight(colour)) {
         ley.push(rowBase + sx, colour);
         continue;
       }
@@ -340,11 +639,12 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
  * Colours that are not on the ramp — stones, water, cobbles — keep their
  * own light and pass through untouched.
  */
-function shiftInRamp(colour: number, shade: number): number {
+function shiftInRamp(colour: number, shade: number, top = Infinity): number {
   const ramp = groundRamp();
   const i = ramp.indexOf(colour);
   if (i < 0) return colour;
-  return ramp[Math.min(ramp.length - 1, Math.max(0, i + shade))];
+  const ceiling = Math.min(ramp.length - 1, top);
+  return ramp[Math.min(ceiling, Math.max(0, i + shade))];
 }
 
 /**
@@ -356,7 +656,6 @@ function shiftInRamp(colour: number, shade: number): number {
  */
 function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
   const ley: number[] = [];
-  const day = daylight();
   const sin = Math.sin(cam.yaw);
   const cos = Math.cos(cam.yaw);
   const cx = cam.x - sin * CAM_BACK;
@@ -383,9 +682,12 @@ function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
       const row = HORIZON + ((eyeAbs - h) * FOCAL) / z;
       if (row < bottom) {
         // Slopes rising away present their face to the viewer and catch
-        // the moon; falling ground turns away into shadow.
+        // the moon; falling ground turns away into shadow. The step is in
+        // ramp rungs, so a finer ramp needs more of them to shift a hillside
+        // by the same amount of light.
         const grade = (h - prevH) / Math.max(1, z - prevZ);
-        const shade = grade > 0.055 ? 1 : grade < -0.055 ? -1 : 0;
+        const step = LOOK.shades ? 2 : 1;
+        const shade = grade > 0.055 ? step : grade < -0.055 ? -step : 0;
         // The same falloff as the flat renderer, so a hillside recedes on
         // exactly the terms the level moor does.
         const far = 1 - Math.min(1, (z / 2400) ** 0.55);
@@ -396,20 +698,23 @@ function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
           const swy = wy + (prevWy - wy) * f;
           let colour = groundColour(swx, swy, z / FOCAL, t, sx, y, far);
           const idx = y * SCREEN_W + sx;
-          if (colour === BC || colour === C) {
+          if (isLeyLight(colour)) {
             // Leyline light overlays after the clash pass; the hillside
             // under it is mid-ramp soil, not a hole.
             ley.push(idx, colour);
             colour = rampColour(groundRamp(), groundLevel(0.45, far), sx, y);
           } else if (shade !== 0) {
-            // One ramp step is a quarter of the day ramp where it is a fifth
-            // of the night's longer one, so hard-shifting every slope that
-            // faces the light pushes half the moor onto the top row — which
-            // flattens precisely what the shading exists to model, and eats
-            // the tuft and moss detail with it. Dithering the shift buys back
-            // a half-step: the same trick the ground already uses to shade
-            // between two colours, applied to the slope instead of the field.
-            if (!day || bayer(sx, y) < 0.5) colour = shiftInRamp(colour, shade);
+            // A moonlit slope steps one rung up the ground ladder — and that
+            // ladder runs on past bare soil into turf, so in the dead wood a
+            // slope facing the moon can grow the grass the band is defined by
+            // not having. It is a small effect on its own; it is the litter
+            // drifts that make it worth stopping, since they put much more of
+            // this floor on the top soil rung for the slope to step off.
+            colour = shiftInRamp(
+              colour,
+              shade,
+              deadness(swx) > 0.5 ? bareRampTop() : Infinity,
+            );
           }
           s.fb[idx] = colour;
           gz[idx] = z;
@@ -422,6 +727,7 @@ function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
       prevH = h;
       prevZ = z;
     }
+    s.horizonRow[sx] = Math.min(s.horizonRow[sx], bottom);
   }
   return ley;
 }
@@ -731,10 +1037,16 @@ export function renderFrame(
   platform?: { x: number; y: number; halfX: number; halfY: number; height: number },
   /** Current cast, if its brief flash has not expired. */
   lightning?: LightningState,
+  /** How far each door has swung, by doorway id. Absent means shut. */
+  doors?: ReadonlyMap<string, number>,
 ): void {
   s.clear();
-  drawSky(s, cam.yaw, cam.x < DEAD_WOOD_X);
+  drawSky(s, cam, deadness(cam.x));
   const ley = LOOK.hills ? drawGroundRelief(s, cam, t) : drawGround(s, cam, t);
+  // The far sites' silhouettes stand where the drawn land actually meets the
+  // sky — after the ground pass so the relief cannot swallow them, before
+  // the attribute pass so they clash-vote like any background art.
+  drawSkylineRing(s, cam);
   if (platform) drawPlatform(s, cam, platform);
   s.attributePass(0, HUD_TOP);
   for (let i = 0; i < ley.length; i += 2) s.fb[ley[i]] = ley[i + 1];
@@ -759,10 +1071,22 @@ export function renderFrame(
           lod: [{ minH: 17, sprite: KEEP_NEAR }],
         }]
       : [];
+  // Door leaves are collected separately from the masonry they hang in: a
+  // swung door is at an angle to both world axes, so it cannot be a box.
+  const leaves: FaceDraw[] = [];
+  for (const door of DOORWAYS) {
+    if (omit?.has("keep") && door.id === "keep-gate") continue;
+    if (Math.hypot(cam.x - door.x, cam.y - door.y) > 900) continue;
+    for (const leaf of door.leaves) {
+      const job = collectLeaf(cam, leaf, doors?.get(door.id) ?? 0);
+      if (job) leaves.push(job);
+    }
+  }
   // Masonry and sprites are interleaved by depth, so a tree in front of the
   // keep occludes it and one behind does not. Standing on the keep's own
   // leads, its masonry is omitted — you cannot see a building from inside it.
   const jobs = [
+    ...leaves,
     ...(omit?.has("keep") || keepDistance > 800 ? [] : collectFaces(cam, KEEP_BOXES)),
     ...(villageDistance > 850 ? [] : collectFaces(cam, VILLAGE_BOXES)),
     ...(hermitageDistance > 700 ? [] : collectFaces(cam, HERMITAGE_BOXES)),

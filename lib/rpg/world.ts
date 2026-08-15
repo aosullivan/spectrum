@@ -5,6 +5,8 @@
 
 import {
   BOULDER_MOSSY,
+  DEAD_BRACKEN,
+  FUNGI_SHELF,
   MENHIR,
   MENHIR_LEY,
   STONE_LEANING,
@@ -35,17 +37,38 @@ import {
   HERMITAGE_PROPS,
   HERMITAGE_R,
 } from "@/lib/rpg/hermitage";
-import { LOOK, daylight } from "@/lib/rpg/look";
-import { B, BB, BC, BG, BW, C, E, G, K, RAMP_G0, W } from "@/lib/rpg/palette";
+import { LOOK, allSoilMat, daylight } from "@/lib/rpg/look";
+import {
+  B,
+  BB,
+  BC,
+  BG,
+  BW,
+  C,
+  E,
+  G,
+  K,
+  R,
+  RAMP_G0,
+  RAMP_G_N,
+  RAMP_L0,
+  W,
+  Y,
+} from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 import {
   VILLAGE_BOXES,
+  VILLAGE_DOORWAYS,
   VILLAGE_POS,
   VILLAGE_PROPS,
+  VILLAGE_YARD,
+  inVillageClearing,
+  type Doorway,
 } from "@/lib/rpg/village";
 
 export { VILLAGE_POS } from "@/lib/rpg/village";
+export type { Doorway } from "@/lib/rpg/village";
 export { HERMITAGE_BOXES, HERMITAGE_POS } from "@/lib/rpg/hermitage";
 
 // ------------------------------------------------------------------- places
@@ -100,68 +123,141 @@ const HENGE_R = 210;
  * never change; the look only changes what darkness is made of. Classic
  * starts at black — the moor lit by nothing but the leyline, shadow as the
  * ground's resting state. The earth look floors it at the region's earth
- * tone instead. The ULAplus look walks the palette's soil rows (16..19)
- * up into grass, so far ground fades to dark soil rather than to void.
+ * tone instead. The ULAplus look walks the palette's soil rows up into
+ * grass, so far ground fades to dark soil rather than to void.
  * Steps are neighbours in tone, so a cell shaded between two of them holds
  * exactly two colours and survives the attribute pass unaltered.
  */
 const GROUND_RAMP: Ramp = [K, K, G, BG];
 const GROUND_RAMP_EARTH: Ramp = [E, E, G, BG];
+/**
+ * The soil rows a table authors, then the living greens: the ladder the
+ * `ramps` look shipped. Its rungs are the *even* entries of the finer ramp
+ * below, so the two differ in resolution and in nothing else.
+ */
 const GROUND_RAMP_ULAPLUS: Ramp = [
   RAMP_G0,
-  RAMP_G0 + 1,
   RAMP_G0 + 2,
+  RAMP_G0 + 4,
   G,
   BG,
 ];
 /**
- * By day the ground has colours in it, not just values, and *no ink in it at
- * all*: shadowed earth, turned earth, dry ochre, lit turf, all four of them
- * terrain rows the region authored. That fourth row (RAMP_G0+3) is the one the
- * night key never had a use for.
- *
- * The night ramp spends three rows getting out of the dark and then hands its
- * whole lit half to G and BG. Under a night that reads as light finding a few
- * things; under a sun it reads as a lawn. The ULA greens are the most
- * chromatic entries in the table — pure `00d800` on the moor — so wherever the
- * lushness field runs high they flood, and slope shading makes it worse by
- * pushing every hillside a step further up. Measured on the moor before this
- * change: 37% of the ground was one saturated green.
- *
- * So the ground ends on the palette's own turf instead. Green still marks
- * growth — it is what the bushes, bracken and crops are drawn in — but it is
- * never what the ground *is*, and every tone underfoot is now a number a
- * region can tune. Nothing on the reference frame is anywhere near that
- * saturated either; grass photographs as ochre and olive far more than it
- * photographs as green.
+ * The same ladder with a shade between every pair. The old one crossed from
+ * dark soil straight to full green in one step, so all the ground a player
+ * actually walks on sat at that step or either side of it and the moor read
+ * as two colours in a dither. The rungs in between are where turf lives.
  */
-const GROUND_RAMP_DAY: Ramp = [
+const GROUND_RAMP_SHADED: Ramp = Array.from(
+  { length: RAMP_G_N },
+  (_, i) => RAMP_G0 + i,
+);
+// The keyed ladders (see look.ts), one per resolution. The ladder the tables
+// ship with climbs from soil into green ink, which is why the near field
+// could go neon; every key anyone plays in ends the mat in soil instead.
+// "moonlit" and "day" are the authored soil span alone (its adopted coarse
+// form was the four anchors; under shades, the same span sampled twice as
+// finely) — the same span, and the same reason: green marks growth, never
+// ground, whether the light comes from a moon or a sun. "meadow" keeps one
+// green step so bright ink survives at the tuft crests.
+//
+// The day key needs no ladder of its own because its *anchors* are different
+// (see applyKey in palette.ts): the same rungs resolve to shadowed earth
+// through lit turf rather than to soil in the dark.
+const GROUND_RAMP_MEADOW: Ramp = [
   RAMP_G0,
-  RAMP_G0 + 1,
   RAMP_G0 + 2,
-  RAMP_G0 + 3,
+  RAMP_G0 + 4,
+  RAMP_G0 + 6,
+  G,
 ];
+const GROUND_RAMP_SOIL: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 2,
+  RAMP_G0 + 4,
+  RAMP_G0 + 6,
+];
+/** The soil span of the shaded ladder: interleave(soil), rows 16..22. */
+const GROUND_RAMP_SOIL_SHADED: Ramp = Array.from(
+  { length: 7 },
+  (_, i) => RAMP_G0 + i,
+);
+/** Everything but the bright-green rung: soil, turf bridges, green. */
+const GROUND_RAMP_MEADOW_SHADED: Ramp = Array.from(
+  { length: RAMP_G_N - 1 },
+  (_, i) => RAMP_G0 + i,
+);
 
 /** The ground ramp the current look shades through. */
 export function groundRamp(): Ramp {
-  if (LOOK.ramps) return daylight() ? GROUND_RAMP_DAY : GROUND_RAMP_ULAPLUS;
+  if (LOOK.ramps) {
+    if (LOOK.shades) {
+      if (LOOK.key === "meadow") return GROUND_RAMP_MEADOW_SHADED;
+      if (allSoilMat()) return GROUND_RAMP_SOIL_SHADED;
+      return GROUND_RAMP_SHADED;
+    }
+    if (LOOK.key === "meadow") return GROUND_RAMP_MEADOW;
+    if (allSoilMat()) return GROUND_RAMP_SOIL;
+    return GROUND_RAMP_ULAPLUS;
+  }
   return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
 }
 
 /**
  * How far up the ramp a lushness `level` sits once distance has had its say.
  *
- * At night distance is simply an absence of light: the field scales toward the
- * bottom of the ramp and the moor fades into its own darkness. Daylight works
- * the other way round — air is not empty, and the far moor is *paler and
- * flatter* than the near one, not darker. So the day key blends toward a fixed
- * mid-ramp haze instead of toward zero, which lifts the distance and, because
- * the blend also shrinks the field's swing, quiets its noise at the same time.
+ * At night distance is simply an absence of light: the field scales toward
+ * the bottom of the ramp and the moor fades into its own darkness. Daylight
+ * works the other way round — air is not empty, and the far moor is *paler
+ * and flatter* than the near one, not darker. So the day key blends toward a
+ * fixed mid-ramp haze instead of toward zero, which lifts the distance and,
+ * because the blend also shrinks the field's swing, quiets its noise at the
+ * same time.
  */
 const HAZE_LEVEL = 0.56;
 
 export function groundLevel(level: number, far: number): number {
   return daylight() ? level * far + HAZE_LEVEL * (1 - far) : level * far;
+}
+
+/**
+ * Ground that is deliberately *not* the mat — a swept yard, a trodden path,
+ * the margin of a sown bed. At night these return black outright, which is
+ * why they read as worn: the mat's darkness becomes soil under the look's
+ * ramp, and theirs does not. Under the sun black is no longer a surface at
+ * all, so the same ground takes a low rung of the ladder and keeps its marks;
+ * it is still the one patch around with no growth on it.
+ */
+function bareEarth(): number {
+  return daylight() ? RAMP_G0 + 2 : K;
+}
+
+/**
+ * Index of the highest rung of the ground ramp in force that is still bare
+ * earth rather than anything living. Anything shading ground *upward* stops
+ * here inside the dead wood, so it cannot manufacture grass in the one band
+ * whose premise is that nothing grows there — the relief pass lighting a slope
+ * that faces the moon does that, and so do the litter drifts, which is the one
+ * that actually needed a ceiling.
+ *
+ * Derived rather than tabulated: there are seven ground ladders now (coarse
+ * and shaded, times day / moonlit / meadow, plus the two non-ULAplus ones) and
+ * they disagree about where soil ends — the moonlit pair are soil all the way
+ * up and have no living rung at all. A hardcoded index was right for exactly
+ * one of them and silently wrong for the rest, so this walks the ramp instead
+ * and finds the last rung still inside the authored soil span.
+ */
+export function bareRampTop(): number {
+  const ramp = groundRamp();
+  // The non-ULAplus ladders are [K, K, G, BG]: the two black rungs are "bare".
+  if (!LOOK.ramps) return 1;
+  // interleave(soil) occupies the first seven ULAplus ground rows; everything
+  // above them bridges into turf and on into green ink (see palette.ts).
+  let top = 0;
+  for (let i = 0; i < ramp.length; i++) {
+    if (ramp[i] >= RAMP_G0 && ramp[i] <= RAMP_G0 + 6) top = i;
+  }
+  return top;
 }
 
 /**
@@ -177,6 +273,17 @@ function band(v: number, a: number, b: number): number {
 }
 
 /**
+ * How completely the dying wood has taken over at a world x: 1 deep in the old
+ * woods, 0 out on the moor. Shared by the ground shading, the relief pass and
+ * the sky, all of which need to know how much of the band's own weather to
+ * apply — and needing it as a fade, not as the hard edge at DEAD_WOOD_X, or
+ * the wood's colour snaps on in a single step as you walk in.
+ */
+export function deadness(wx: number): number {
+  return 1 - band(wx, DEAD_WOOD_X - 130, DEAD_WOOD_X + 130);
+}
+
+/**
  * How far up its ramp the ground mat sits, and so how much of the near moor
  * is lit at all. This is the dial between the two things the look wants at
  * once: the design's black-dominant moor, and the density that makes dither
@@ -188,18 +295,6 @@ function band(v: number, a: number, b: number): number {
  * mat over and hands the frame to green. Distance scales it down on top.
  */
 const MAT_DENSITY = 1.05;
-
-/**
- * Ground that is deliberately *not* the mat — a swept yard, a trodden path,
- * the margin of a sown bed. At night these return black outright, which is
- * why they read as worn: the mat's darkness becomes soil under the look's
- * ramp, and theirs does not. Under the sun black is no longer a surface at
- * all, so the same ground takes the ramp's turned-earth row and keeps its
- * marks; it is still the one patch around with no growth on it.
- */
-function bareEarth(): number {
-  return daylight() ? RAMP_G0 + 1 : K;
-}
 
 /**
  * Ground colour at a world point, or K for bare dark earth.
@@ -231,19 +326,15 @@ export function groundColour(
   const ix = Math.floor(wx);
   const iy = Math.floor(wy);
 
-  // --- the sacred pool: black glass under the moon, open water by day ---
-  // Still water is not painted water. At night it is deliberate black — K
-  // returned here passes through every look untouched, unlike the mat's
-  // darkness, which the look's ramp turns to soil — and everything the water
-  // says is laid ON the black: a glade of broken glitter running toward the
-  // light's bearing, single glints, two thin rings widening from where the
-  // lady stands, and lily pads rafted near the shore. The old look — a solid
-  // bright rim around a 50% blue checkerboard — read as a paddling pool; a
-  // mirror reads as what it reflects.
-  //
-  // A mirror by day reflects a bright sky, so the same water resolves to blue
-  // with cyan in it. Everything laid on top is untouched: the glitter still
-  // runs to the sun's bearing, the rings still spread.
+  // --- the sacred pool: black glass under the moon ---
+  // Still water is not painted water. It is deliberate black — K returned
+  // here passes through every look untouched, unlike the mat's darkness,
+  // which the look's ramp turns to soil — and everything the water says is
+  // laid ON the black: a moon-glade of broken glitter running
+  // toward the moon's bearing, single star-glints, two thin rings widening
+  // from where the lady stands, and lily pads rafted near the shore. The
+  // old look — a solid bright rim around a 50% blue checkerboard — read as
+  // a paddling pool; a mirror reads as what it reflects.
   const gx = wx - GROVE_POS.x;
   const gy = wy - GROVE_POS.y;
   const gd = Math.sqrt(gx * gx + gy * gy);
@@ -281,11 +372,12 @@ export function groundColour(
     }
     // Star-glints: single pixels, appearing and going out.
     if (hash(ix * 3 + Math.floor(t * 1.5), iy * 5) < 5) return BW;
+    // A whisper of deep blue in the black keeps it reading as water.
     // A whisper of deep blue in the black keeps it reading as water. By day
-    // the pair steps up rather than changing character: bright blue broken
-    // over blue. Not C — the ground pass reads cyan as leyline light and
-    // lifts it out of the clash, which is right for the rings above and
-    // wrong for the body of the water.
+    // a mirror reflects a bright sky, so the pair steps up rather than
+    // changing character: bright blue broken over blue. Not C — the ground
+    // pass reads cyan as leyline light and lifts it out of the clash, which
+    // is right for the rings above and wrong for the body of the water.
     if (hash(ix >> 1, iy >> 1) < 85 && (ix + iy) % 2 === 0) {
       return daylight() ? BB : B;
     }
@@ -312,12 +404,17 @@ export function groundColour(
   }
   // --- village lane and yard: a swept yard, not moorland ---
   // Bare earth with a cobble stipple, and no mat over it — the village reads
-  // as trodden ground precisely because the shading stops at its edge.
-  const vx = wx - VILLAGE_POS.x;
-  const vy = wy - VILLAGE_POS.y;
-  const villageSquare = Math.abs(vx) < 82 && Math.abs(vy) < 138;
-  const southLane = Math.abs(vx) < 17 && vy > -250 && vy < -100;
-  if (villageSquare || southLane) {
+  // as trodden ground precisely because the shading stops at its edge. That
+  // edge is frayed against a coarse hash rather than drawn true: a clean
+  // ellipse of bare earth reads as a plot someone pegged out, and the yard
+  // has to stop short of the treeline anyway, or the ring of grass between
+  // the two goes with it.
+  const yx = (wx - VILLAGE_YARD.x) / VILLAGE_YARD.rx;
+  const yy = (wy - VILLAGE_YARD.y) / VILLAGE_YARD.ry;
+  const yard = Math.sqrt(yx * yx + yy * yy);
+  const southLane =
+    Math.abs(wx - VILLAGE_POS.x) < 17 && wy > 846 && wy < VILLAGE_YARD.y;
+  if (yard < 1 - (hash(ix >> 3, iy >> 3) % 80) / 1000 || southLane) {
     const cobble = hash(ix >> 1, iy >> 1);
     if (cobble < 95 && (ix + iy) % 3 === 0) return W;
     if ((iy & 15) === 0 && (ix & 7) < 3) return W;
@@ -363,7 +460,13 @@ export function groundColour(
       ax < core + 30 &&
       hash(ix, iy + 77) < 120 * (1 - (ax - core - 6.4) / 24)
     ) {
-      return C;
+      // The spill used to thin by count alone — the same cyan, fewer of it,
+      // which past a few paces is indistinguishable from grit. Graded down
+      // the glow ramp it dims as well as thins, so the far edge of the light
+      // is light rather than speckle.
+      if (!LOOK.shades) return C;
+      const out = (ax - core - 6.4) / 24;
+      return out < 0.3 ? C : out < 0.62 ? RAMP_L0 + 3 : RAMP_L0 + 2;
     }
   }
 
@@ -371,7 +474,7 @@ export function groundColour(
   let level = (fbm(hash, wx, wy, 90) * 0.62 + fbm(hash, wx, wy, 26) * 0.38) * MAT_DENSITY;
 
   // --- biome: dying woodland west, living greenwood east, moor between ---
-  const dead = 1 - band(wx, DEAD_WOOD_X - 130, DEAD_WOOD_X + 130);
+  const dead = deadness(wx);
   const greenwood = band(wx, GREENWOOD_EDGE_X - 130, GREENWOOD_EDGE_X + 130);
   // The eastern wood keeps only a whisper of extra green: the concept's
   // forest floor is black-dominant, moss pooling between the trees rather
@@ -415,8 +518,60 @@ export function groundColour(
   // smoothly to read as 8-bit. Widen the jumps and that stops being true.
   if (footprint < 3) {
     const tuft = hash(ix, iy);
-    if (tuft < (70 + greenwood * 10) * (1 - grove * 0.8)) level += 0.22;
-    else if (tuft > 972 && grove < 0.3) level -= 0.4;
+    // Nothing tufts in the dead wood. The moor's grass noise ran through the
+    // band unchanged, which put green speckle across a floor whose whole
+    // premise is that nothing grows on it.
+    if (tuft < (70 + greenwood * 10) * (1 - grove * 0.8) * (1 - dead * 0.9)) {
+      level += 0.22;
+    } else if (tuft > 972 && grove < 0.3) level -= 0.4;
+  }
+
+  // --- the dead wood's floor: leaf litter, not turf ---
+  // The band's ground was the mat at its darkest, unbroken: one flat brown
+  // slab under white trees, and half of every westward frame spent saying
+  // nothing. What is on it now is what the trees dropped when they died.
+  //
+  // Two layers, because doing it in one is a trap. Drifts come first and carry
+  // no new hue at all — they only lift the mat, so the floor gains its texture
+  // through the soil rungs it already had. The actual fallen leaves go on top
+  // and stay small and sparse: at full saturation and any real coverage, amber
+  // stops reading as leaves on a woodland floor and starts reading as litter
+  // in the other sense of the word.
+  if (dead > 0.2) {
+    const dx0 = Math.floor(wx / 34);
+    const dy0 = Math.floor(wy / 34);
+    const dh = hash(dx0 ^ 0x1b7f, dy0);
+    if (dh < 460) {
+      const ddx = wx - (dx0 * 34 + 6 + (dh % 22));
+      const ddy = (wy - (dy0 * 34 + 6 + ((dh >> 3) % 22))) * 1.8;
+      if (ddx * ddx + ddy * ddy < 150) level += 0.24 * dead;
+    }
+  }
+  if (dead > 0.2 && footprint < 2.2) {
+    const cell = 5;
+    const lx = Math.floor(wx / cell);
+    const ly = Math.floor(wy / cell);
+    const lh = hash(lx, ly ^ 0x3c1d);
+    if (lh < 210 * dead * far) {
+      const dx = wx - (lx * cell + (lh % cell));
+      const dy = (wy - (ly * cell + ((lh >> 4) % cell))) * 1.6;
+      if (dx * dx + dy * dy < 1.1 + (lh % 3) * 0.4) return lh % 4 === 0 ? R : Y;
+    }
+  }
+
+  // The dead band never climbs into the ramp's living rungs, whatever the
+  // noise, the moss and the drifts happen to add up to. The ground ladder runs
+  // bare soil up through turf into full green, so a high enough peak in the
+  // field grows grass in the one band that must not have any.
+  //
+  // This is a guard on the drifts above rather than a fix for something that
+  // was wrong: measured over twelve frames deep in the wood, the ground
+  // ladder's green rungs were 0.06% of ground pixels before this pass and the
+  // drifts took that to 0.27%. Small either way — but it is the drifts' own
+  // doing, so they pay for it, and the ceiling costs one subtraction.
+  if (dead > 0) {
+    const ceiling = bareRampTop() / (groundRamp().length - 1);
+    level -= Math.max(0, level - ceiling) * dead;
   }
 
   // --- loose stones scattered through it ---
@@ -479,7 +634,7 @@ export const KEEP_BOXES: readonly Box[] = [
   // pass beneath and is therefore absent from ground collision.
   { x: KEEP_POS.x - 44, y: KEEP_GATE_Y - 9, w: 32, d: 46, base: 0, top: 98, detail: "gate" },
   { x: KEEP_POS.x + 44, y: KEEP_GATE_Y - 9, w: 32, d: 46, base: 0, top: 98, detail: "gate" },
-  { x: KEEP_POS.x, y: KEEP_GATE_Y - 8, w: 52, d: 3, base: 0, top: 70, detail: "door" },
+  { x: KEEP_POS.x, y: KEEP_GATE_Y - 8, w: 52, d: 3, base: 0, top: 70, detail: "opening" },
   { x: KEEP_POS.x, y: KEEP_GATE_Y - 9, w: 120, d: 46, base: 74, top: 98, detail: "gate" },
   // Crenellations use the same wall runs, so the silhouette follows the
   // collision footprint rather than an unrelated facade.
@@ -549,6 +704,37 @@ function crenellateY(
 const PLACED: Feature[] = [
   ...VILLAGE_PROPS,
   ...HERMITAGE_PROPS,
+
+  // The village's own trees, composed rather than rolled for. The clearing
+  // above takes the wood out wholesale, and a bald ellipse in the greenwood
+  // looks as wrong as the thicket did — so a few go back, chosen for where
+  // they stand: one great oak on the green beside the well, which is the
+  // tree a village is built around; two behind the cottages, which put
+  // canopy on the skyline without standing between you and a door; and a
+  // pair either side of the lane's mouth, so the approach is a way in
+  // through trees rather than an opening in a hedge. Nothing stands on the
+  // square itself or in front of a frontage.
+  ...(
+    [
+      { x: 372, y: 1032, sprite: TREE_OAK, height: 96 },
+      { x: 686, y: 1220, sprite: TREE_OAK, height: 78 },
+      { x: 202, y: 1266, sprite: TREE_BIRCH, height: 66 },
+      { x: 300, y: 1310, sprite: TREE_OAK, height: 72 },
+      { x: 352, y: 966, sprite: TREE_BIRCH, height: 62 },
+      { x: 512, y: 966, sprite: TREE_OAK, height: 70 },
+      { x: 664, y: 1002, sprite: TREE_BIRCH, height: 58 },
+    ] as const
+  ).map((t) => ({ ...t })),
+  // Scrub along the verge, where the swept ground gives out.
+  ...(
+    [
+      { x: 322, y: 1332, h: 13 },
+      { x: 556, y: 1330, h: 12 },
+      { x: 198, y: 1148, h: 11 },
+      { x: 674, y: 1136, h: 12 },
+      { x: 386, y: 982, h: 10 },
+    ] as const
+  ).map((b) => ({ x: b.x, y: b.y, sprite: BUSH, height: b.h })),
   // Opening tableau: pale sarsens establish the near, middle, and far planes
   // visible in the reference frame while remaining ordinary world objects.
   { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
@@ -654,16 +840,21 @@ const PLACED: Feature[] = [
       solid: 30,
     };
   }),
-  ...[0, 1, 2, 3, 4, 5].map((i) => {
-    const a = (i / 6) * Math.PI * 2;
-    return {
-      x: HENGE_POS.x + Math.sin(a) * 250,
-      y: HENGE_POS.y + Math.cos(a) * 250,
-      sprite: i % 3 === 0 ? SARSEN_FALLEN : SARSEN_TALL,
-      height: i % 3 === 0 ? 26 : 84,
-      solid: i % 3 === 0 ? 26 : 14,
-    };
-  }),
+  // One of the six lands inside the village, so it is dropped: the ring is
+  // outliers fallen around the henge, and an outlier fewer on the far side is
+  // not something anyone can count.
+  ...[0, 1, 2, 3, 4, 5]
+    .map((i) => {
+      const a = (i / 6) * Math.PI * 2;
+      return {
+        x: HENGE_POS.x + Math.sin(a) * 250,
+        y: HENGE_POS.y + Math.cos(a) * 250,
+        sprite: i % 3 === 0 ? SARSEN_FALLEN : SARSEN_TALL,
+        height: i % 3 === 0 ? 26 : 84,
+        solid: i % 3 === 0 ? 26 : 14,
+      };
+    })
+    .filter((s) => !inVillageClearing(s.x, s.y)),
 
   // The grove, composed rather than distributed. The old ring — eight
   // near-identical trees at one radius — read as a municipal hedge. Now the
@@ -757,6 +948,33 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
       });
     }
   }
+  // The old wood's own understory: dead bracken thickly, since it is the band's
+  // main body of colour at eye level and the thing that stops the middle
+  // distance being empty dark between trunks — and fungus rationed hard, since
+  // it is the brightest thing on the floor and scattered freely it would read
+  // as flowers in a wood that is supposed to be dying.
+  if (woods) {
+    for (let i = 0; i < 2; i++) {
+      const bh = hash((cx ^ 0x2c71) + i * 47, cy ^ 0x6b3d);
+      if (bh < 520) {
+        out.push({
+          x: baseX + (bh % CHUNK),
+          y: baseY + ((bh >> 5) % CHUNK),
+          sprite: DEAD_BRACKEN,
+          height: 9 + (bh % 4) * 2,
+        });
+      }
+    }
+    const fh = hash(cx ^ 0x77a3, cy ^ 0x1e59);
+    if (fh < 150) {
+      out.push({
+        x: baseX + ((fh * 3) % CHUNK),
+        y: baseY + ((fh * 5) % CHUNK),
+        sprite: FUNGI_SHELF,
+        height: 6 + (fh % 3),
+      });
+    }
+  }
   // Scrub in the eastern wood — low living bracken under the dead canopy.
   if (greenwood) {
     for (let i = 0; i < 2; i++) {
@@ -817,6 +1035,13 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   // dead wood is dense enough to swallow a stone circle whole.
   const clear = out.filter((f) => {
     if (Math.abs(f.x) < 14 && f.y < KEEP_POS.y) return false;
+    // The village needs this more than any of them. It stands east of
+    // GREENWOOD_EDGE_X, where the chunk roll is at its densest — four
+    // attempts a chunk at better than even odds — and it was the one named
+    // place with no clearing at all, so the wood grew through the houses,
+    // stood in the doorways and closed over the lane. Trees inside the
+    // village are authored below, not rolled for.
+    if (inVillageClearing(f.x, f.y)) return false;
     if (Math.hypot(f.x - GROVE_POS.x, f.y - GROVE_POS.y) < GROVE_R) return false;
     if (Math.hypot(f.x - HENGE_POS.x, f.y - HENGE_POS.y) < HENGE_R) return false;
     if (Math.hypot(f.x - CIRCLE_POS.x, f.y - CIRCLE_POS.y) < CIRCLE_R) return false;
@@ -832,15 +1057,56 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
 }
 
 /**
- * Glide into the warded door and cross directly into the roofed hall.
- * `trigger` is shallow so the transition happens at the timber threshold.
+ * Every door in the world, keep gate and cottage alike.
+ *
+ * The keep's threshold used to be a bespoke box test bolted to the side of
+ * the update loop, which is why it was the only building you could walk into.
+ * One list, one rule: come within `noticeAt` and the leaves swing; come within
+ * `enterAt` with them clear and you are through.
+ *
+ * The gate takes two leaves rather than one — a fifty-unit slab swinging off a
+ * single hinge is a barn door — and they open outward like every other door
+ * here. Inward was the first instinct, and it made them invisible: swung back
+ * into an unlit gateway a black leaf against a black opening says nothing at
+ * all. Outward they come round against the moonlit ground in full view, and
+ * because each leaf stays on its own side of the arch neither one sweeps the
+ * line you walk up.
  */
-export const GATE = {
-  halfW: 28,
-  y: KEEP_GATE_Y + 10,
-  trigger: 18,
-  doorstepY: KEEP_GATE_Y - 34,
-} as const;
+export const DOORWAYS: readonly Doorway[] = [
+  {
+    id: "keep-gate",
+    site: "keep",
+    x: KEEP_POS.x,
+    y: KEEP_GATE_Y + 28,
+    halfW: 28,
+    noticeAt: 96,
+    enterAt: 36,
+    doorstepY: KEEP_GATE_Y - 34,
+    leaves: [
+      {
+        hx: KEEP_POS.x - 26,
+        hy: KEEP_GATE_Y - 8,
+        shut: Math.PI / 2,
+        swing: 1.62,
+        width: 26,
+        base: 0,
+        top: 70,
+        detail: "door",
+      },
+      {
+        hx: KEEP_POS.x + 26,
+        hy: KEEP_GATE_Y - 8,
+        shut: -Math.PI / 2,
+        swing: -1.62,
+        width: 26,
+        base: 0,
+        top: 70,
+        detail: "door",
+      },
+    ],
+  },
+  ...VILLAGE_DOORWAYS,
+];
 
 /**
  * Solid footprints the hero cannot glide through. The keep is a wall, not a
@@ -852,7 +1118,10 @@ const WORLD_COLLIDERS = [
   ...HERMITAGE_BOXES,
 ].filter(
   (box) =>
-    box.base === 0 && box.detail !== "door" && box.detail !== "timberDoor",
+    box.base === 0 &&
+    box.detail !== "door" &&
+    box.detail !== "timberDoor" &&
+    box.detail !== "opening",
 );
 const OUTDOOR_BODY_R = 10;
 

@@ -47,8 +47,8 @@ export interface DialPlan {
   readonly rows: readonly string[];
   /** World units per cell. */
   readonly cell: number;
-  /** Which column the ley vein runs down. */
-  readonly leyCellX: number;
+  /** Which column the ley vein runs down, where one does. */
+  readonly leyCellX?: number;
 }
 
 export interface PanelState {

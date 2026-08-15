@@ -10,12 +10,13 @@
 // world.ts imports colour indices from palette.ts, so the region mapping cannot
 // live in either of them without a cycle.
 
+import { LOOK } from "@/lib/rpg/look";
 import {
+  applyKey,
   EMBER_DUSK,
   MOONLIT,
   PAL_TELEVISION,
   ULA_STANDARD,
-  lit,
   type PaletteTable,
 } from "@/lib/rpg/palette";
 import {
@@ -38,7 +39,7 @@ function ramp(v: number, lo: number, hi: number): number {
 
 function newTable(): [number, number, number][] {
   return Array.from(
-    { length: ULA_STANDARD.night.length },
+    { length: ULA_STANDARD.length },
     () => [0, 0, 0] as [number, number, number],
   );
 }
@@ -73,24 +74,23 @@ function mix(
  * cold electric baseline, the greenwood is softened like a picture on a
  * television. The grove overrides whichever band it sits in — still water is
  * the one place that should not look like the forest around it.
- *
- * Each mood is asked for the key in force first (`lit`), so night and day are
- * the same map of the world under two different lights.
  */
 export function paletteAt(x: number, y: number): PaletteTable {
-  const moor = lit(ULA_STANDARD);
-  let out: PaletteTable = moor;
+  // The key swaps ground- and sky-row values inside the base tables, so it
+  // has to land before any of them is read or blended from.
+  applyKey(LOOK.key === "off" ? "off" : LOOK.key === "day" ? "day" : "night");
+  let out: PaletteTable = ULA_STANDARD;
   if (x < DEAD_WOOD_X + BAND_FADE) {
     out = mix(
-      lit(EMBER_DUSK),
-      moor,
+      EMBER_DUSK,
+      ULA_STANDARD,
       ramp(x, DEAD_WOOD_X - BAND_FADE, DEAD_WOOD_X + BAND_FADE),
       banded,
     );
   } else if (x > GREENWOOD_EDGE_X - BAND_FADE) {
     out = mix(
-      moor,
-      lit(PAL_TELEVISION),
+      ULA_STANDARD,
+      PAL_TELEVISION,
       ramp(x, GREENWOOD_EDGE_X - BAND_FADE, GREENWOOD_EDGE_X + BAND_FADE),
       banded,
     );
@@ -98,7 +98,7 @@ export function paletteAt(x: number, y: number): PaletteTable {
   const grove = Math.hypot(x - GROVE_POS.x, y - GROVE_POS.y);
   if (grove < GROVE_R + GROVE_FADE) {
     out = mix(
-      lit(MOONLIT),
+      MOONLIT,
       out,
       ramp(grove, GROVE_R - GROVE_FADE, GROVE_R + GROVE_FADE),
       blended,
