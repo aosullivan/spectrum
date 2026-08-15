@@ -52,6 +52,14 @@ export interface Look {
   ramps: boolean;
   /** Rolling value-noise relief; ridges occlude and stand against the sky. */
   hills: boolean;
+  /**
+   * The finer ULAplus rows: ground and sky ramps at twice the resolution,
+   * masonry shaded through a stone ladder instead of a white dither, and
+   * distance spent in value — a far billboard steps down its own ramp rather
+   * than being dithered into holes. Needs `ramps`, which is where the ground
+   * and sky ladders come from in the first place.
+   */
+  shades: boolean;
   night: NightMode;
   skyline: SkylineMode;
 }
@@ -63,6 +71,7 @@ const CLASSIC: Look = {
   attribute: "8x8",
   ramps: false,
   hills: false,
+  shades: false,
   night: "off",
   skyline: "off",
 };
@@ -74,6 +83,7 @@ const DUSK: Look = {
   attribute: "8x1",
   ramps: false,
   hills: false,
+  shades: false,
   night: "off",
   skyline: "off",
 };
@@ -81,11 +91,15 @@ const DUSK: Look = {
 /** Dusk under ULAplus value ramps, standing on the rolling heightfield. */
 const RELIEF: Look = { ...DUSK, ramps: true, hills: true };
 
+/** Relief with the ramps at full ULAplus depth. */
+const SHADED: Look = { ...RELIEF, shades: true };
+
 /**
- * Relief under the moonlit night key: navy zenith, deep starfield, all-soil
- * mat — green ink marks growth, light marks light, the ground keeps neither.
+ * Shaded relief under the moonlit night key: navy zenith, deep starfield,
+ * all-soil mat — green ink marks growth, light marks light, the ground
+ * keeps neither.
  */
-const MOONLIT_NIGHT: Look = { ...RELIEF, night: "moonlit" };
+const MOONLIT_NIGHT: Look = { ...SHADED, night: "moonlit" };
 
 /**
  * The moonlit night with the peopled skyline ring: far sites hold their
@@ -114,8 +128,9 @@ export const LOOK_PRESETS: Record<string, Look> = {
   dusk: { ...DUSK },
   ramps: { ...DUSK, ramps: true },
   relief: { ...RELIEF },
-  nightsky: { ...RELIEF, night: "sky" },
-  nightmeadow: { ...RELIEF, night: "meadow" },
+  shaded: { ...SHADED },
+  nightsky: { ...SHADED, night: "sky" },
+  nightmeadow: { ...SHADED, night: "meadow" },
   nightmoonlit: { ...MOONLIT_NIGHT },
   skysites: { ...MOONLIT_NIGHT, skyline: "sites" },
   skypeopled: { ...RINGED_NIGHT },

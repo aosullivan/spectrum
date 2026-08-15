@@ -14,7 +14,20 @@ import {
 import { KEEP_MID, KEEP_NEAR } from "@/lib/rpg/art";
 import { rampColour, type Ramp } from "@/lib/rpg/dither";
 import { LOOK } from "@/lib/rpg/look";
-import { B, BC, BW, BY, C, G, K, RAMP_S0, W, Y } from "@/lib/rpg/palette";
+import {
+  B,
+  BC,
+  BW,
+  BY,
+  C,
+  G,
+  K,
+  RAMP_S0,
+  RAMP_S_N,
+  W,
+  Y,
+  isLeyLight,
+} from "@/lib/rpg/palette";
 import { terrainHeight } from "@/lib/rpg/terrain";
 import {
   REFERENCE_HERO_BACK,
@@ -74,7 +87,15 @@ const MOON_AZIMUTH = -0.72;
 const SKY_RAMP: Ramp = [K, B];
 
 /** The ULAplus sky rows: a real zenith-to-horizon gradient (see palette.ts). */
-const SKY_RAMP_ULAPLUS: Ramp = [RAMP_S0, RAMP_S0 + 1, RAMP_S0 + 2, RAMP_S0 + 3];
+const SKY_RAMP_ULAPLUS: Ramp = [RAMP_S0, RAMP_S0 + 2, RAMP_S0 + 4, RAMP_S0 + 6];
+
+/**
+ * The same gradient with a step between each pair. Sky is a third of the
+ * frame and almost entirely flat field, so it is where the ordered dither
+ * shows most: four steps over sixty rows leaves three visible bands of weave,
+ * and seven leaves none.
+ */
+const SKY_RAMP_SHADED: Ramp = Array.from({ length: RAMP_S_N }, (_, i) => RAMP_S0 + i);
 
 /**
  * Height of a range of hills above the horizon at an azimuth, in pixels.
@@ -286,10 +307,11 @@ function drawSky(s: Screen, cam: CameraState, dead: boolean): void {
   // past a fifth coverage it stops being air and becomes a painted band
   // competing with the horizon.
   if (LOOK.ramps) {
+    const ramp = LOOK.shades ? SKY_RAMP_SHADED : SKY_RAMP_ULAPLUS;
     for (let y = 0; y < HORIZON; y++) {
       const level = Math.pow(y / (HORIZON - 1), 1.7);
       for (let x = 0; x < SCREEN_W; x++) {
-        s.px(x, y, rampColour(SKY_RAMP_ULAPLUS, level, x, y));
+        s.px(x, y, rampColour(ramp, level, x, y));
       }
     }
   } else if (LOOK.skyGlow) {
@@ -487,7 +509,7 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
       const colour = groundColour(wx, wy, footprint, t, sx, sy, far);
       if (colour === K) continue;
       // Leyline light never fades with distance and skips the clash pass.
-      if (colour === BC || colour === C) {
+      if (isLeyLight(colour)) {
         ley.push(rowBase + sx, colour);
         continue;
       }
@@ -544,9 +566,12 @@ function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
       const row = HORIZON + ((eyeAbs - h) * FOCAL) / z;
       if (row < bottom) {
         // Slopes rising away present their face to the viewer and catch
-        // the moon; falling ground turns away into shadow.
+        // the moon; falling ground turns away into shadow. The step is in
+        // ramp rungs, so a finer ramp needs more of them to shift a hillside
+        // by the same amount of light.
         const grade = (h - prevH) / Math.max(1, z - prevZ);
-        const shade = grade > 0.055 ? 1 : grade < -0.055 ? -1 : 0;
+        const step = LOOK.shades ? 2 : 1;
+        const shade = grade > 0.055 ? step : grade < -0.055 ? -step : 0;
         // The same falloff as the flat renderer, so a hillside recedes on
         // exactly the terms the level moor does.
         const far = 1 - Math.min(1, (z / 2400) ** 0.55);
@@ -557,7 +582,7 @@ function drawGroundRelief(s: Screen, cam: CameraState, t: number): number[] {
           const swy = wy + (prevWy - wy) * f;
           let colour = groundColour(swx, swy, z / FOCAL, t, sx, y, far);
           const idx = y * SCREEN_W + sx;
-          if (colour === BC || colour === C) {
+          if (isLeyLight(colour)) {
             // Leyline light overlays after the clash pass; the hillside
             // under it is mid-ramp soil, not a hole.
             ley.push(idx, colour);

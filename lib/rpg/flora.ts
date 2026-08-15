@@ -1,6 +1,7 @@
-// Living-woodland flora and the henge stones. String bitmaps, one char per
-// pixel, '.' transparent. These are the lush counterpart to the dead moor
-// trees in art.ts — the two woods must never be mistaken for each other.
+// Grove flora and the henge stones. String bitmaps, one char per pixel,
+// '.' transparent. Since the concept-frame restyle the wood at large is the
+// bone forest in art.ts; anything still in leaf lives here and stands only
+// in the sacred grove — the one green place, and it must feel like it.
 
 import { C, G, K, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
 import { foliage, sprite } from "@/lib/rpg/screen";
@@ -424,7 +425,7 @@ export const TRILITHON = sprite(
   [
     "..............................................",
     "..............................................",
-    "..WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWkWWkWWk.",
+    "..WWWWggggWWWWWWggggWWWWWWWgggWWWggWWWkWWkWWk.",
     "..Wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwkwwk.",
     "...Wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww..",
     ".WWwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwkkwwwwwww..",
@@ -492,9 +493,9 @@ export const SARSEN_TALL = sprite(
     "..................",
     "..................",
     "..................",
-    ".......WWWkkkk....",
-    ".......Wwkwkww....",
-    "......Wwwwwkww....",
+    ".......hggggk.....",
+    ".......Wggwkgw....",
+    "......Wwwgwkww....",
     "......Wwwwwwkk....",
     "......Wwwwwwkkk...",
     ".....Wwwwwwwkkk...",
@@ -536,7 +537,7 @@ export const SARSEN_TALL = sprite(
     "...Wwwkkkkkkwk....",
     ".kkkgkggggkgkgk...",
   ],
-  { w: W, W: BW, k: K, g: G },
+  { w: W, W: BW, k: K, g: G, h: BG },
 );
 
 /**

@@ -10,7 +10,9 @@
 // what sells it: circle the keep and its walls change brightness because
 // their orientation to the light is a property of the world, not of you.
 
-import { BC, BW, K, W } from "@/lib/rpg/palette";
+import { rampColour, type Ramp } from "@/lib/rpg/dither";
+import { LOOK } from "@/lib/rpg/look";
+import { BC, BW, K, RAMP_K0, W } from "@/lib/rpg/palette";
 import {
   CAM_HEIGHT,
   FOCAL,
@@ -46,6 +48,26 @@ const LIGHT_Y = 0.8;
 /** Flat tones, same ladder as the interior walls. */
 const TONES = [0.62, 0.44, 0.28, 0.14];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+/**
+ * Masonry as tone rather than as coverage (the `shades` look). A wall used to
+ * be white dithered over black at one of four densities, which at any distance
+ * averages to a grey — so the information was there, but spent on speckle. The
+ * same four numbers walked up a stone ladder land on nearly the same greys as
+ * solid colour, and what the dither was doing is freed up to model the face.
+ * K sits at the bottom: an unlit wall is still black, and masonry still has to
+ * occlude what stands behind it.
+ */
+const STONE_RAMP: Ramp = [
+  K,
+  RAMP_K0,
+  RAMP_K0 + 1,
+  RAMP_K0 + 2,
+  RAMP_K0 + 3,
+  W,
+  RAMP_K0 + 5,
+  BW,
+];
 
 interface CamPoint {
   lat: number;
@@ -114,7 +136,13 @@ function paintPolygon(
     const xb = Math.min(SCREEN_W - 1, Math.floor(hi));
     for (let x = xa; x <= xb; x++) {
       const edge = x === xa || x === xb || y === y0 || y === y1;
-      if (edge) {
+      if (LOOK.shades) {
+        // The rim is two rungs above the face rather than always bright
+        // white: on a lit wall that is still very nearly BW, but on a wall
+        // turned away it stops drawing a wireframe around a dark shape.
+        const at = edge ? Math.min(1, level + 0.29) : level;
+        s.fb[y * SCREEN_W + x] = rampColour(STONE_RAMP, at, x, y);
+      } else if (edge) {
         s.fb[y * SCREEN_W + x] = BW;
       } else if (BAYER[(y & 3) * 4 + (x & 3)] < level * 16) {
         s.fb[y * SCREEN_W + x] = W;
@@ -319,7 +347,13 @@ export function collectFaces(
 
       const lit = 0.5 + 0.5 * (f.nx * LIGHT_X + f.ny * LIGHT_Y);
       const band = z > 900 ? 2 : z > 420 ? 1 : 0;
-      const level = TONES[Math.min(3, band + (lit > 0.62 ? 0 : lit > 0.3 ? 1 : 2))];
+      // With a ladder under it the face can take its light continuously
+      // instead of falling into one of three buckets: the fit runs through
+      // the same three tones the buckets used, so a wall lands where it
+      // always did and the angles between them stop snapping as you circle.
+      const level = LOOK.shades
+        ? Math.max(0.05, 0.22 + 0.4 * lit - band * 0.17)
+        : TONES[Math.min(3, band + (lit > 0.62 ? 0 : lit > 0.3 ? 1 : 2))];
       const screen = poly.map((p) => ({
         x: 128 + (p.lat * FOCAL) / p.z,
         y: heightRow(p.h, p.z),
@@ -355,9 +389,12 @@ export function collectFaces(
         x: 128 + (p.lat * FOCAL) / p.z,
         y: heightRow(p.h, p.z),
       }));
+      const level = LOOK.shades
+        ? Math.max(0.05, TONES[0] - band * 0.17)
+        : TONES[Math.min(3, band)];
       out.push({
         z: z + 0.5, // ties broken behind the walls that meet it
-        paint: (s) => paintPolygon(s, screen, TONES[Math.min(3, band)]),
+        paint: (s) => paintPolygon(s, screen, level),
       });
     }
   }
