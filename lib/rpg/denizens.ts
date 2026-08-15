@@ -8,6 +8,7 @@ import {
   NPC_HERMIT,
   SPIDER,
   WATER_SPIRIT,
+  WATER_SPIRIT_FRAMES,
 } from "@/lib/rpg/bestiary";
 import { SPIRIT_WISP } from "@/lib/rpg/flora";
 import type { Actor } from "@/lib/rpg/interact";
@@ -192,7 +193,9 @@ export const DENIZENS: Denizen[] = [
     },
   }),
 
-  // The lady of the sacred pool. She rises where the water is stillest.
+  // The lady of the sacred pool. She rises where the water is stillest,
+  // drifting slowly on it, her cascade animated and her light doubled in
+  // the black water below her.
   denizen({
     id: "pool-lady",
     originX: GROVE_POS.x,
@@ -203,8 +206,11 @@ export const DENIZENS: Denizen[] = [
     phase: 0,
     hostile: false,
     sprite: WATER_SPIRIT,
-    height: 52,
-    elevate: 15,
+    frames: WATER_SPIRIT_FRAMES,
+    fps: 4,
+    mirror: true,
+    height: 56,
+    elevate: 2,
     reach: 104,
     label: "RECEIVE THE BLESSING",
     interaction: {
@@ -219,12 +225,14 @@ export const DENIZENS: Denizen[] = [
     },
   }),
 
-  // Wisps drifting among the henge stones and the greenwood.
+  // Wisps drifting among the henge stones and the greenwood — and two that
+  // keep to the grove, circling low over the pool, their light doubled in
+  // the water. Their orbits stay inside the pool's radius so the mirror
+  // image never lands on grass.
   ...([
     { id: "wisp-1", x: HENGE_POS.x - 60, y: HENGE_POS.y + 40, p: 0.0 },
     { id: "wisp-2", x: HENGE_POS.x + 80, y: HENGE_POS.y - 30, p: 1.7 },
     { id: "wisp-3", x: HENGE_POS.x + 10, y: HENGE_POS.y + 120, p: 3.0 },
-    { id: "wisp-4", x: GROVE_POS.x + 150, y: GROVE_POS.y + 90, p: 2.3 },
     { id: "wisp-5", x: 620, y: 260, p: 0.9 },
   ] as const).map((w) =>
     denizen({
@@ -239,6 +247,27 @@ export const DENIZENS: Denizen[] = [
       sprite: SPIRIT_WISP,
       height: 20,
       elevate: 16,
+      reach: 0,
+      label: "",
+    }),
+  ),
+  ...([
+    { id: "wisp-pool-1", rx: 38, ry: 26, e: 22, p: 2.3, rate: 0.19 },
+    { id: "wisp-pool-2", rx: 27, ry: 36, e: 13, p: 5.1, rate: 0.26 },
+  ] as const).map((w) =>
+    denizen({
+      id: w.id,
+      originX: GROVE_POS.x,
+      originY: GROVE_POS.y,
+      roamX: w.rx,
+      roamY: w.ry,
+      rate: w.rate,
+      phase: w.p,
+      hostile: false,
+      sprite: SPIRIT_WISP,
+      mirror: true,
+      height: 13,
+      elevate: w.e,
       reach: 0,
       label: "",
     }),

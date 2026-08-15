@@ -196,62 +196,109 @@ export const ELF_ARCHER = sprite(
 );
 
 /**
- * The lady of the pool: light standing up out of still water,
- * arms opening. She blesses what comes to her and asks nothing.
- * (18x30)
+ * The lady of the pool, redrawn as a figure instead of a totem: a crowned
+ * head tilted over one shoulder, hair streaming aside as if underwater, one
+ * arm held out over the water offering a mote of light, and from the waist
+ * down a waterfall — vertical bright streams with the pool showing through
+ * the gaps — meeting the surface in a lit ring.
+ *
+ * Asymmetry is the whole redesign. The old sprite was mirror-symmetric and
+ * read as a cyan cactus at every distance; nothing alive is symmetric, and
+ * at fourteen pixels the flying hair and the offered arm are what say
+ * "woman" rather than "pillar".
+ *
+ * Three frames, base rows edited per frame: the cascade's gaps slide, the
+ * mote pulses and lets a droplet fall, the hair drifts. At range the frame
+ * differences vote-average into a shimmer, which is the right thing for a
+ * spirit to do.
+ * (22x36)
  */
-export const WATER_SPIRIT = sprite(
-  [
-    ".......hwwh.......",
-    "......hbwwbh......",
-    ".....hbwwwwbh.....",
-    ".....hbwwwwbh.....",
-    "......hbwwbh......",
-    "......cbwwbc......",
-    "....c.cbwwbc.c....",
-    "...cb.cbwwbc.bc...",
-    "..cbb.cbwwbc.bbc..",
-    "..cbbccbwwbccbbc..",
-    "..cbbbbbwwbbbbbc..",
-    "..cbbbbbwwbbbbbc..",
-    "...cbbbbwwbbbbc...",
-    "....cbbbwwbbbc....",
-    "....cbbbwwbbbc....",
-    "....cbbbwwbbbc....",
-    "...ccbbbwwbbbcc...",
-    "...cbbbbwwbbbbc...",
-    "...cbbb.ww.bbbc...",
-    "...cbb..ww..bbc...",
-    "...cbb.cwwc.bbc...",
-    "...cb.ccwwcc.bc...",
-    "....c.cbwwbc.c....",
-    "....ccbbwwbbcc....",
-    "...c.cbbwwbbc.c...",
-    "..c...cbwwbc...c..",
-    "..c....cwwc....c..",
-    ".c...c.cwwc.c...c.",
-    "....c...cc...c....",
-    "..c...c.cc.c...c..",
-  ],
-  { c: C, b: BC, w: BW, h: BW },
-);
+const LADY_ROWS: readonly string[] = [
+  "......................",
+  "......................",
+  "........w.w.w.........",
+  ".........bbb..........",
+  ".....cc.bwwwb.........",
+  "...cccc.bwwwb.........",
+  ".c.ccc..bkwkb.........",
+  "..ccc....bwb..........",
+  ".cs.c.....w...........",
+  "......bbbbwbbbb.......",
+  ".c....bccwcccbcc......",
+  "......bccwcckb..cc..w.",
+  "....cc.bccwccb....cb..",
+  "....cc.bccwccb........",
+  ".....cc.bcwccb........",
+  ".....cc.bcckcb........",
+  "......c.bcccb.........",
+  "........bcccb.........",
+  ".......bcccccb........",
+  ".......c.cbc.cb.......",
+  "......cc.cbc.cbc......",
+  "......c.bcbc.cb.c.....",
+  ".....cc.cbcc.cbc.c....",
+  ".....c.ccb.c.cb.cc....",
+  ".....c.cbc.cc.bc.c....",
+  "....cc.cb.c.cb.cc.c...",
+  "....c.ccbc.ccb.c.c....",
+  "....c.cb.c.cbc.cc.c...",
+  "...cc.cbc.c.cb.c.cc...",
+  "...c.ccb.cc.cbc.c.c...",
+  "...c.cwbc.c.cb.cc.c...",
+  "..cc.cb.c.ccb.c.cc.c..",
+  "..c.ccbc.c.cbw.cc.c...",
+  "..c.cb.cc.c.cb.c.cc...",
+  "..sbbc.bbcbbc.bbcbs...",
+  ".cc..cc...bb...cc..cc.",
+];
+const LADY_LEGEND = { c: C, b: BC, w: BW, s: W, k: K };
 
-/**
- * A ring of ripple-light, laid on the water behind her.
- * (16x7)
- */
-export const POOL_RIPPLE = sprite(
-  [
-    "....cccccccc....",
-    "..cc........cc..",
-    ".c............c.",
-    "c..............c",
-    ".c............c.",
-    "..cc........cc..",
-    "....cccccccc....",
-  ],
-  { c: BC },
-);
+/** One animation frame: the base figure with a handful of rows replaced. */
+function ladyFrame(edits: Record<number, string>): ReturnType<typeof sprite> {
+  return sprite(
+    LADY_ROWS.map((row, i) => edits[i] ?? row),
+    LADY_LEGEND,
+  );
+}
+
+export const WATER_SPIRIT_FRAMES = [
+  ladyFrame({}),
+  ladyFrame({
+    1: "....................w.",
+    6: "c...cc..bkwkb.........",
+    8: "..cs.c....w...........",
+    11: "......bccwcckb..cc.ww.",
+    19: ".......cc.bc.cb.......",
+    22: ".....c.cbc.cc.bc.c....",
+    24: ".....cc.cbcc.cbc.c....",
+    25: "....c.cb.c.cbc.cc.c...",
+    27: "....cc.cb.c.cb.cc.c...",
+    28: "...c.ccb.cc.cbc.c.c...",
+    29: "...cc.cbc.c.cb.c.cc...",
+    30: "...c.cbbc.c.cb.cc.c...",
+    31: "..c.ccb.c.cb.cc.c.cc..",
+    33: "..c.cb.cc.cwcb.c.cc...",
+  }),
+  ladyFrame({
+    6: ".cc.cc..bkwkb.........",
+    8: ".c.sc.....w...........",
+    11: "......bccwcckb..cc....",
+    13: "....cc.bccwccb......w.",
+    15: ".....cc.bckccb........",
+    19: ".......c.cbcc.b.......",
+    20: "......c.ccbc.cbc......",
+    23: ".....c.cbc.cc.bc.c....",
+    24: ".....c.ccb.c.cb.cc....",
+    25: "....cc.b.cc.cb.cc.c...",
+    29: "...c.ccb.cc.cbc.cc....",
+    32: "..c.ccbc.c.cbb.cc.c...",
+    34: "..sbbcb.bcbbc.bbcbs...",
+    35: ".cc...cc..bb..cc...cc.",
+  }),
+] as const;
+
+/** The base frame, for anything that wants her without the animation. */
+export const WATER_SPIRIT = WATER_SPIRIT_FRAMES[0];
 
 /**
  * A wanderer of the greenwood under a wide brim, leaning on a staff. Grey

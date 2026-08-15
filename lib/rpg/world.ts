@@ -14,12 +14,15 @@ import { DOLMEN, STONE_L, STONE_M, STONE_S } from "@/lib/rpg/assets";
 import {
   BUSH,
   FALLEN_LOG,
+  FLOWERS,
   MUSHROOM_PATCH,
+  REEDS,
   SARSEN_FALLEN,
   SARSEN_TALL,
   TREE_BIRCH,
   TREE_OAK,
   TREE_PINE_LIVE,
+  TREE_WILLOW,
   TRILITHON,
 } from "@/lib/rpg/flora";
 import { fbm, rampColour, type Ramp } from "@/lib/rpg/dither";
@@ -29,7 +32,8 @@ import {
   HERMITAGE_PROPS,
   HERMITAGE_R,
 } from "@/lib/rpg/hermitage";
-import { B, BB, BC, BG, C, G, K, W } from "@/lib/rpg/palette";
+import { LOOK } from "@/lib/rpg/look";
+import { B, BC, BG, BW, C, E, G, K, RAMP_G0, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 import {
@@ -122,6 +126,34 @@ function band(v: number, a: number, b: number): number {
 const MAT_DENSITY = 1.05;
 
 /**
+ * What bare ground is made of, per look: void black (classic), the flat
+ * earth tone (dusk), or — under the ULAplus ramps — a mottled value ramp,
+ * heather-dark to moss-lit, with a lit verge where the leyline's light
+ * spills onto the soil beside it. The mat's K returns resolve through this
+ * in the renderer, so the ground keeps one source of truth for "nothing
+ * grows here" and the looks only disagree about what that looks like.
+ */
+export function bareGround(wx: number, wy: number): number {
+  if (!LOOK.ramps) return LOOK.earth ? E : K;
+  const ix = Math.floor(wx);
+  const iy = Math.floor(wy);
+  // Broad moisture clumps set the value; sparse lit blades sit proud.
+  const m = hash(ix >> 2, iy >> 2);
+  let step = m < 240 ? 2 : m < 700 ? 1 : 0;
+  if (hash(ix, iy ^ 0xabc) < 28) step = 3;
+  const ax = Math.abs(wx);
+  if (wy < KEEP_POS.y && ax < 30) step += ax < 14 ? 2 : 1;
+  return RAMP_G0 + Math.min(3, step);
+}
+
+/** True over the sacred pool's still water — the one true black in the world. */
+export function inPool(wx: number, wy: number): boolean {
+  const dx = wx - GROVE_POS.x;
+  const dy = wy - GROVE_POS.y;
+  return dx * dx + dy * dy < POOL_R * POOL_R;
+}
+
+/**
  * Ground colour at a world point, or K for bare dark earth.
  * The look: black dominates; the ground is *shaded* rather than stippled —
  * a smooth lushness field resolved into two neighbouring ramp colours by an
@@ -150,17 +182,73 @@ export function groundColour(
   const ix = Math.floor(wx);
   const iy = Math.floor(wy);
 
-  // --- the sacred pool: still water, ringed by ripple-light ---
+  // --- the sacred pool: black glass under the moon ---
+  // Still water is not painted water. It is the one true black in the world
+  // (the renderer's soil-fill leaves it alone — see inPool), and everything
+  // it says is laid ON the black: a moon-glade of broken glitter running
+  // toward the moon's bearing, single star-glints, two thin rings widening
+  // from where the lady stands, and lily pads rafted near the shore. The
+  // old look — a solid bright rim around a 50% blue checkerboard — read as
+  // a paddling pool; a mirror reads as what it reflects.
   const gx = wx - GROVE_POS.x;
   const gy = wy - GROVE_POS.y;
   const gd = Math.sqrt(gx * gx + gy * gy);
   if (gd < POOL_R) {
-    if (gd > POOL_R - 3) return BC;                       // bright rim
-    // Rings travelling outward, so the surface is never quite still.
-    const ring = (gd - t * 7) % 17;
-    if (ring >= 0 && ring < 1.6) return C;
-    if ((ix + iy) % 2 === 0) return B;
-    return hash(ix, iy + 4242) < 60 ? BB : K;
+    // Lily pads raft in the shallows, never the middle: flat world-plane
+    // discs, so perspective foreshortens them like real pads. A moonward
+    // bright edge models each one; no flowers — a lone white pixel loses
+    // the cell's two-colour vote and becomes grit.
+    if (gd > POOL_R - 26 && footprint < 2.6) {
+      const px = Math.floor(wx / 9);
+      const py = Math.floor(wy / 9);
+      const ph = hash(px, py ^ 0x77);
+      if (ph < 260) {
+        const pcx = px * 9 + 3 + (ph % 4);
+        const pcy = py * 9 + 3 + ((ph >> 2) % 4);
+        const pdx = wx - pcx;
+        const pdy = (wy - pcy) * 1.9;
+        if (pdx * pdx + pdy * pdy < 7.5) return pdy < -1.6 ? BG : G;
+      }
+    }
+    // Rings spreading from the lady, thin as a held breath, gone before
+    // they reach the shore.
+    if (gd < 48) {
+      const ring = (((gd - t * 5) % 24) + 24) % 24;
+      if (ring < 1.1) return C;
+    }
+    // The moon-glade: the moon's path laid on the water along its true
+    // bearing (see MOON_AZIMUTH), dense at the centre line, frayed at the
+    // edges, and twitching pixel by pixel — glitter, not paint.
+    const glade = Math.abs(gx * 0.752 + gy * 0.659);
+    if (glade < 7) {
+      const tw = Math.floor(t * 2.5);
+      const sparkle = hash(ix + tw, iy * 3);
+      if (sparkle < 300 * (1 - glade / 7)) return sparkle < 55 ? BW : W;
+    }
+    // Star-glints: single pixels, appearing and going out.
+    if (hash(ix * 3 + Math.floor(t * 1.5), iy * 5) < 5) return BW;
+    // A whisper of deep blue in the black keeps it reading as water.
+    if (hash(ix >> 1, iy >> 1) < 85 && (ix + iy) % 2 === 0) return B;
+    return K;
+  }
+  if (gd < GROVE_R) {
+    // The shore: a dark wet lip, then a silvered verge where the moon
+    // catches the grass — brightest at the waterline, gone in a few paces.
+    if (gd < POOL_R + 2.2) return B;
+    if (gd < POOL_R + 10) {
+      const vh = hash(ix, iy ^ 0x3c3c);
+      if (vh < 430 * (1 - (gd - POOL_R - 2.2) / 8)) return BG;
+      if (vh > 986) return W;
+    }
+    // The pilgrim path: bare trodden earth wandering in from the western
+    // tree-gap to the water's edge, the one line that leads the eye (and
+    // the feet) straight to the lady.
+    if (gx < 4) {
+      const wob = ((hash(ix >> 4, 991) % 5) - 2) * 0.9;
+      if (Math.abs(gy - wob) < 3.2) {
+        return hash(ix, iy + 17) < 55 ? W : K;
+      }
+    }
   }
   // --- village lane and yard: a swept yard, not moorland ---
   // Bare earth with a cobble stipple, and no mat over it — the village reads
@@ -194,7 +282,10 @@ export function groundColour(
     const core = Math.max(1.6, footprint * 0.7);
     // Broken along its length near to hand. Walk along the vein rather than
     // across it and a solid core lies over the whole near floor as one flat
-    // cyan slab; dashed, it reads as light coming up through the turf.
+    // cyan slab; dashed, it reads as light coming up through the turf. The
+    // dark halves of the breaks and fringes stay K on purpose: the renderer
+    // resolves them through bareGround, so under the earth and ramp looks
+    // the light sits on soil instead of on a burnt black strip.
     if (ax < core) {
       if (footprint > 3) return BC;
       // Broken irregularly, not on a modulo: a strict repeat up the middle
@@ -222,8 +313,14 @@ export function groundColour(
   // dips back below the ramp's black step and the wood goes solid green.
   level += greenwood * 0.12 - dead * 0.5;
 
-  // --- the living ground ringing the sacred pool lifts the whole field ---
-  if (gd < GROVE_R) level += 0.34 * (1 - gd / GROVE_R);
+  // --- the living ground ringing the sacred pool ---
+  // A gentle lift only: the old 0.34 closed the mat into wall-to-wall mint
+  // speckle and the grove lost every shadow it had. The grove reads sacred
+  // by being CALMER than the moor — the sward smooths out (the tuft noise
+  // below is damped by `grove`), and what light there is gathers at the
+  // silvered verge and the glade on the water.
+  const grove = gd < GROVE_R ? 1 - gd / GROVE_R : 0;
+  level += 0.16 * grove;
 
   // --- moss patches: elliptical blooms on a coarse lattice ---
   const mx = Math.floor(wx / 56);
@@ -239,7 +336,9 @@ export function groundColour(
 
   // --- tufts standing proud, and bare scrapes worn through ---
   // Per-pixel detail only survives close up; further out it aliases into
-  // noise, and the falloff is already thinning the field for us.
+  // noise, and the falloff is already thinning the field for us. Damped
+  // toward the pool: the grove's sward is tended by something, and calm
+  // ground against a busy moor is half of what makes it feel set apart.
   //
   // This is the one part of the shading that is not attribute-cheap. The
   // smooth field crosses at most one ramp step inside an 8x8 cell, so it
@@ -251,8 +350,8 @@ export function groundColour(
   // smoothly to read as 8-bit. Widen the jumps and that stops being true.
   if (footprint < 3) {
     const tuft = hash(ix, iy);
-    if (tuft < 70 + greenwood * 25) level += 0.22;
-    else if (tuft > 972) level -= 0.4;
+    if (tuft < (70 + greenwood * 25) * (1 - grove * 0.8)) level += 0.22;
+    else if (tuft > 972 && grove < 0.3) level -= 0.4;
   }
 
   // --- loose stones scattered through it ---
@@ -476,16 +575,51 @@ const PLACED: Feature[] = [
     };
   }),
 
-  // Oaks and birches standing around the sacred pool.
-  ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-    const a = (i / 8) * Math.PI * 2 + 0.4;
-    return {
-      x: GROVE_POS.x + Math.sin(a) * 172,
-      y: GROVE_POS.y + Math.cos(a) * 172,
-      sprite: i % 3 === 0 ? TREE_BIRCH : TREE_OAK,
-      height: i % 3 === 0 ? 58 : 70,
-    };
-  }),
+  // The grove, composed rather than distributed. The old ring — eight
+  // near-identical trees at one radius — read as a municipal hedge. Now the
+  // willows lean over the water where the moon-glade lands, birches catch
+  // the light in the middle distance, the elder oak stands north behind the
+  // lady, and the west stays open for the pilgrim path, flanked by two
+  // gate-stones where it passes the tree line. Bearings are chosen so the
+  // pool reads framed from every approach, never fenced.
+  ...(
+    [
+      { a: 0.85, r: 118, sprite: TREE_WILLOW, height: 66 },
+      { a: -2.35, r: 126, sprite: TREE_WILLOW, height: 72 },
+      { a: -0.3, r: 168, sprite: TREE_OAK, height: 86 },
+      { a: 1.45, r: 150, sprite: TREE_BIRCH, height: 56 },
+      { a: 2.2, r: 176, sprite: TREE_BIRCH, height: 60 },
+      { a: -1.05, r: 182, sprite: TREE_BIRCH, height: 54 },
+      { a: 2.75, r: 190, sprite: TREE_OAK, height: 66 },
+      { a: -2.9, r: 196, sprite: TREE_OAK, height: 70 },
+      // Gate-stones flanking the path's mouth in the western tree-gap.
+      { a: -1.44, r: 148, sprite: SARSEN_TALL, height: 30 },
+      { a: -1.72, r: 146, sprite: SARSEN_TALL, height: 24 },
+      // Two mossed pilgrim stones at the water's edge.
+      { a: -0.55, r: 86, sprite: SARSEN_TALL, height: 26 },
+      { a: 1.15, r: 92, sprite: SARSEN_TALL, height: 18 },
+    ] as const
+  ).map((p) => ({
+    x: GROVE_POS.x + Math.sin(p.a) * p.r,
+    y: GROVE_POS.y + Math.cos(p.a) * p.r,
+    sprite: p.sprite,
+    height: p.height,
+  })),
+  // Reeds stand in the shallows' verge, and flower tufts drift through the
+  // sward — small enough to only speak up close, which is exactly when the
+  // grove has to feel tended.
+  ...([0.5, 1.7, 2.9, -0.95, -2.05] as const).map((a, i) => ({
+    x: GROVE_POS.x + Math.sin(a) * (66 + (i % 3) * 3),
+    y: GROVE_POS.y + Math.cos(a) * (66 + ((i + 1) % 3) * 3),
+    sprite: REEDS,
+    height: 10 + (i % 3) * 2,
+  })),
+  ...([0.25, 1.0, 1.9, 2.6, 3.05, -0.6, -2.3, -2.75] as const).map((a, i) => ({
+    x: GROVE_POS.x + Math.sin(a) * (84 + (i * 29) % 64),
+    y: GROVE_POS.y + Math.cos(a) * (84 + ((i * 41) % 58)),
+    sprite: FLOWERS,
+    height: 4 + (i % 2),
+  })),
 ];
 
 function chunkFeatures(cx: number, cy: number): Feature[] {

@@ -3,7 +3,14 @@
 // than like two different games stitched together.
 
 import { BC, BG, BR, BW, BY, C, K } from "@/lib/rpg/palette";
-import { HORIZON, HUD_TOP, SCREEN_W, type Screen, type Sprite } from "@/lib/rpg/screen";
+import {
+  HORIZON,
+  HUD_TOP,
+  SCREEN_W,
+  flippedV,
+  type Screen,
+  type Sprite,
+} from "@/lib/rpg/screen";
 
 /** Distance from eye to projection plane, in pixels. */
 export const FOCAL = 110;
@@ -95,6 +102,12 @@ export interface Billboard {
   highlight?: boolean;
   /** Remaining hostile energy, 0..1. Omitted for non-combatants. */
   energy?: number;
+  /**
+   * Standing in still water: paint a dimmed, foreshortened, upside-down
+   * copy below the foot line. Only meaningful over the pool — a reflection
+   * on grass is a stain.
+   */
+  mirror?: boolean;
 }
 
 /**
@@ -117,10 +130,12 @@ export function collectBillboards(
   t = 0,
   /** Per-column wall distance from the interior raycaster; null outdoors. */
   depth: Float32Array | null = null,
+  /** Ground elevation sampler when the relief look is on; null keeps flat. */
+  terrain: ((x: number, y: number) => number) | null = null,
 ): SpriteDraw[] {
   const { fx, fy } = forward(cam.yaw);
   const { ex, ey } = eyeOf(cam);
-  const eyeY = eyeHeight(cam);
+  const eyeY = eyeHeight(cam) + (terrain ? terrain(cam.x, cam.y) : 0);
   const drawn: {
     z: number;
     screenX: number;
@@ -132,6 +147,9 @@ export function collectBillboards(
     glow?: boolean;
     highlight?: boolean;
     energy?: number;
+    mirror?: boolean;
+    /** Screen pixels between the foot line and the surface it hovers over. */
+    hoverPx?: number;
   }[] = [];
 
   for (const it of items) {
@@ -178,9 +196,12 @@ export function collectBillboards(
     // Elevated props hang above the floor — a sconce on a wall, not a lamp
     // standing on the flags. `stands` lifts the whole prop to a storey, so
     // battlements on the roof sit at roof height rather than in the mud.
+    // Under the relief look everything also stands on its hillside.
     const baseY =
       groundRow(z, eyeY) -
-      (((it.elevate ?? 0) + (it.stands ?? 0)) * FOCAL) / z;
+      (((it.elevate ?? 0) + (it.stands ?? 0) + (terrain ? terrain(it.x, it.y) : 0)) *
+        FOCAL) /
+        z;
     drawn.push({
       z,
       screenX,
@@ -192,6 +213,8 @@ export function collectBillboards(
       glow: it.glow,
       highlight: it.highlight,
       energy: it.energy,
+      mirror: it.mirror,
+      hoverPx: ((it.elevate ?? 0) * FOCAL) / z,
     });
   }
 
@@ -216,6 +239,30 @@ export function collectBillboards(
     return {
       z: it.z,
       paint: (s: Screen) => {
+        // The reflection goes down before everything: a flipped copy of the
+        // sprite hanging below the water line, foreshortened and broken to
+        // a sparse dither so it reads as light on the surface rather than
+        // as a second creature. A hovering thing's image starts below the
+        // surface by the same (squashed) gap it floats above it.
+        if (it.mirror) {
+          const squash = 0.55;
+          const surfaceY = it.baseY + (it.hoverPx ?? 0);
+          const rh = it.h * squash;
+          const bottom = surfaceY + ((it.hoverPx ?? 0) + it.h) * squash;
+          if (bottom > surfaceY) {
+            s.blitScaled(
+              flippedV(it.sprite),
+              it.screenX,
+              bottom,
+              w,
+              rh,
+              2,
+              undefined,
+              depth,
+              it.z,
+            );
+          }
+        }
         // The pool goes down first, so what stands in it occludes it.
         if (it.glow) drawGlow(s, it.screenX, footY, w, t, depth, it.z);
         if (it.highlight) {
