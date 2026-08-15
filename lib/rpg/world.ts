@@ -34,7 +34,20 @@ import {
   HERMITAGE_R,
 } from "@/lib/rpg/hermitage";
 import { LOOK } from "@/lib/rpg/look";
-import { B, BC, BG, BW, C, E, G, K, RAMP_G0, W } from "@/lib/rpg/palette";
+import {
+  B,
+  BC,
+  BG,
+  BW,
+  C,
+  E,
+  G,
+  K,
+  RAMP_G0,
+  RAMP_G_N,
+  RAMP_L0,
+  W,
+} from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
 import {
@@ -98,24 +111,39 @@ const HENGE_R = 210;
  * never change; the look only changes what darkness is made of. Classic
  * starts at black — the moor lit by nothing but the leyline, shadow as the
  * ground's resting state. The earth look floors it at the region's earth
- * tone instead. The ULAplus look walks the palette's soil rows (16..19)
- * up into grass, so far ground fades to dark soil rather than to void.
+ * tone instead. The ULAplus look walks the palette's soil rows up into
+ * grass, so far ground fades to dark soil rather than to void.
  * Steps are neighbours in tone, so a cell shaded between two of them holds
  * exactly two colours and survives the attribute pass unaltered.
  */
 const GROUND_RAMP: Ramp = [K, K, G, BG];
 const GROUND_RAMP_EARTH: Ramp = [E, E, G, BG];
+/**
+ * The soil rows a table authors, then the living greens: the ladder the
+ * `ramps` look shipped. Its rungs are the *even* entries of the finer ramp
+ * below, so the two differ in resolution and in nothing else.
+ */
 const GROUND_RAMP_ULAPLUS: Ramp = [
   RAMP_G0,
-  RAMP_G0 + 1,
   RAMP_G0 + 2,
+  RAMP_G0 + 4,
   G,
   BG,
 ];
+/**
+ * The same ladder with a shade between every pair. The old one crossed from
+ * dark soil straight to full green in one step, so all the ground a player
+ * actually walks on sat at that step or either side of it and the moor read
+ * as two colours in a dither. The rungs in between are where turf lives.
+ */
+const GROUND_RAMP_SHADED: Ramp = Array.from(
+  { length: RAMP_G_N },
+  (_, i) => RAMP_G0 + i,
+);
 
 /** The ground ramp the current look shades through. */
 export function groundRamp(): Ramp {
-  if (LOOK.ramps) return GROUND_RAMP_ULAPLUS;
+  if (LOOK.ramps) return LOOK.shades ? GROUND_RAMP_SHADED : GROUND_RAMP_ULAPLUS;
   return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
 }
 
@@ -296,7 +324,13 @@ export function groundColour(
       ax < core + 30 &&
       hash(ix, iy + 77) < 120 * (1 - (ax - core - 6.4) / 24)
     ) {
-      return C;
+      // The spill used to thin by count alone — the same cyan, fewer of it,
+      // which past a few paces is indistinguishable from grit. Graded down
+      // the glow ramp it dims as well as thins, so the far edge of the light
+      // is light rather than speckle.
+      if (!LOOK.shades) return C;
+      const out = (ax - core - 6.4) / 24;
+      return out < 0.3 ? C : out < 0.62 ? RAMP_L0 + 3 : RAMP_L0 + 2;
     }
   }
 
