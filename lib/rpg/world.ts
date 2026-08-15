@@ -5,6 +5,8 @@
 
 import {
   BOULDER_MOSSY,
+  DEAD_BRACKEN,
+  FUNGI_SHELF,
   MENHIR,
   MENHIR_LEY,
   STONE_LEANING,
@@ -45,10 +47,12 @@ import {
   E,
   G,
   K,
+  R,
   RAMP_G0,
   RAMP_G_N,
   RAMP_L0,
   W,
+  Y,
 } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
@@ -150,6 +154,22 @@ export function groundRamp(): Ramp {
 }
 
 /**
+ * Index of the highest rung of the current ground ramp that is still bare
+ * earth rather than anything living. The shaded ladder spends its first seven
+ * rungs on the four authored soil tones and their midpoints, then bridges to
+ * green over the last four; the coarse ladders reach turf far sooner.
+ *
+ * Anything that shades ground *upward* stops here inside the dead wood, so it
+ * cannot manufacture grass in the one band whose premise is that nothing grows
+ * there. Two things do: the relief pass lighting a slope that faces the moon,
+ * and the litter drifts, which is the one that actually needed a ceiling.
+ */
+export function bareRampTop(): number {
+  if (!LOOK.ramps) return 1;
+  return LOOK.shades ? 6 : 2;
+}
+
+/**
  * Smooth 0..1 crossing between two world coordinates. The bands used to
  * differ by which ramp they picked, which put a hard seam down the map where
  * one gave way to the next — invisible when the ground was sparse marks,
@@ -159,6 +179,17 @@ export function groundRamp(): Ramp {
 function band(v: number, a: number, b: number): number {
   const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
   return t * t * (3 - 2 * t);
+}
+
+/**
+ * How completely the dying wood has taken over at a world x: 1 deep in the old
+ * woods, 0 out on the moor. Shared by the ground shading, the relief pass and
+ * the sky, all of which need to know how much of the band's own weather to
+ * apply — and needing it as a fade, not as the hard edge at DEAD_WOOD_X, or
+ * the wood's colour snaps on in a single step as you walk in.
+ */
+export function deadness(wx: number): number {
+  return 1 - band(wx, DEAD_WOOD_X - 130, DEAD_WOOD_X + 130);
 }
 
 /**
@@ -340,7 +371,7 @@ export function groundColour(
   let level = (fbm(hash, wx, wy, 90) * 0.62 + fbm(hash, wx, wy, 26) * 0.38) * MAT_DENSITY;
 
   // --- biome: dying woodland west, living greenwood east, moor between ---
-  const dead = 1 - band(wx, DEAD_WOOD_X - 130, DEAD_WOOD_X + 130);
+  const dead = deadness(wx);
   const greenwood = band(wx, GREENWOOD_EDGE_X - 130, GREENWOOD_EDGE_X + 130);
   // The eastern wood keeps only a whisper of extra green: the concept's
   // forest floor is black-dominant, moss pooling between the trees rather
@@ -384,8 +415,60 @@ export function groundColour(
   // smoothly to read as 8-bit. Widen the jumps and that stops being true.
   if (footprint < 3) {
     const tuft = hash(ix, iy);
-    if (tuft < (70 + greenwood * 10) * (1 - grove * 0.8)) level += 0.22;
-    else if (tuft > 972 && grove < 0.3) level -= 0.4;
+    // Nothing tufts in the dead wood. The moor's grass noise ran through the
+    // band unchanged, which put green speckle across a floor whose whole
+    // premise is that nothing grows on it.
+    if (tuft < (70 + greenwood * 10) * (1 - grove * 0.8) * (1 - dead * 0.9)) {
+      level += 0.22;
+    } else if (tuft > 972 && grove < 0.3) level -= 0.4;
+  }
+
+  // --- the dead wood's floor: leaf litter, not turf ---
+  // The band's ground was the mat at its darkest, unbroken: one flat brown
+  // slab under white trees, and half of every westward frame spent saying
+  // nothing. What is on it now is what the trees dropped when they died.
+  //
+  // Two layers, because doing it in one is a trap. Drifts come first and carry
+  // no new hue at all — they only lift the mat, so the floor gains its texture
+  // through the soil rungs it already had. The actual fallen leaves go on top
+  // and stay small and sparse: at full saturation and any real coverage, amber
+  // stops reading as leaves on a woodland floor and starts reading as litter
+  // in the other sense of the word.
+  if (dead > 0.2) {
+    const dx0 = Math.floor(wx / 34);
+    const dy0 = Math.floor(wy / 34);
+    const dh = hash(dx0 ^ 0x1b7f, dy0);
+    if (dh < 460) {
+      const ddx = wx - (dx0 * 34 + 6 + (dh % 22));
+      const ddy = (wy - (dy0 * 34 + 6 + ((dh >> 3) % 22))) * 1.8;
+      if (ddx * ddx + ddy * ddy < 150) level += 0.24 * dead;
+    }
+  }
+  if (dead > 0.2 && footprint < 2.2) {
+    const cell = 5;
+    const lx = Math.floor(wx / cell);
+    const ly = Math.floor(wy / cell);
+    const lh = hash(lx, ly ^ 0x3c1d);
+    if (lh < 210 * dead * far) {
+      const dx = wx - (lx * cell + (lh % cell));
+      const dy = (wy - (ly * cell + ((lh >> 4) % cell))) * 1.6;
+      if (dx * dx + dy * dy < 1.1 + (lh % 3) * 0.4) return lh % 4 === 0 ? R : Y;
+    }
+  }
+
+  // The dead band never climbs into the ramp's living rungs, whatever the
+  // noise, the moss and the drifts happen to add up to. The ground ladder runs
+  // bare soil up through turf into full green, so a high enough peak in the
+  // field grows grass in the one band that must not have any.
+  //
+  // This is a guard on the drifts above rather than a fix for something that
+  // was wrong: measured over twelve frames deep in the wood, the ground
+  // ladder's green rungs were 0.06% of ground pixels before this pass and the
+  // drifts took that to 0.27%. Small either way — but it is the drifts' own
+  // doing, so they pay for it, and the ceiling costs one subtraction.
+  if (dead > 0) {
+    const ceiling = bareRampTop() / (groundRamp().length - 1);
+    level -= Math.max(0, level - ceiling) * dead;
   }
 
   // --- loose stones scattered through it ---
@@ -723,6 +806,33 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
         x: baseX + (h % CHUNK),
         y: baseY + ((h >> 3) % CHUNK),
         ...tree,
+      });
+    }
+  }
+  // The old wood's own understory: dead bracken thickly, since it is the band's
+  // main body of colour at eye level and the thing that stops the middle
+  // distance being empty dark between trunks — and fungus rationed hard, since
+  // it is the brightest thing on the floor and scattered freely it would read
+  // as flowers in a wood that is supposed to be dying.
+  if (woods) {
+    for (let i = 0; i < 2; i++) {
+      const bh = hash((cx ^ 0x2c71) + i * 47, cy ^ 0x6b3d);
+      if (bh < 520) {
+        out.push({
+          x: baseX + (bh % CHUNK),
+          y: baseY + ((bh >> 5) % CHUNK),
+          sprite: DEAD_BRACKEN,
+          height: 9 + (bh % 4) * 2,
+        });
+      }
+    }
+    const fh = hash(cx ^ 0x77a3, cy ^ 0x1e59);
+    if (fh < 150) {
+      out.push({
+        x: baseX + ((fh * 3) % CHUNK),
+        y: baseY + ((fh * 5) % CHUNK),
+        sprite: FUNGI_SHELF,
+        height: 6 + (fh % 3),
       });
     }
   }
