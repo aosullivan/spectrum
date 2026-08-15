@@ -6,15 +6,6 @@ import { glyph } from "@/lib/rpg/assets";
 import { B, BC, BG, BW, BY, C, G, K, M, W, Y } from "@/lib/rpg/palette";
 import { HUD_TOP, SCREEN_W, type Screen, type Sprite } from "@/lib/rpg/screen";
 
-/** Retained for the area-map and game-state instrument model. */
-export const RADAR_RANGE = 290;
-
-export interface Blip {
-  x: number;
-  y: number;
-  hostile: boolean;
-}
-
 export interface PanelState {
   spellName: string;
   runes: readonly Sprite[];
@@ -23,12 +14,6 @@ export interface PanelState {
   lifeforce: number;
   gems: readonly boolean[];
   carried: readonly string[];
-  place: string;
-  x: number;
-  y: number;
-  yaw: number;
-  blips: readonly Blip[];
-  plan?: { rows: readonly string[]; cell: number };
 }
 
 export function drawText(
@@ -73,7 +58,7 @@ export function drawWindow(
 
 const POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
-/** Compass point for a yaw. Yaw 0 faces north. */
+/** Compass point for a yaw. Yaw 0 faces north; the area map draws it. */
 export function headingOf(yaw: number): string {
   const turn = Math.PI * 2;
   const a = ((yaw % turn) + turn) % turn;

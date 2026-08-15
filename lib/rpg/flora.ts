@@ -3,14 +3,14 @@
 // trees in art.ts — the two woods must never be mistaken for each other.
 
 import { C, G, K, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
-import { sprite } from "@/lib/rpg/screen";
+import { foliage, sprite } from "@/lib/rpg/screen";
 
 /**
  * A great spreading oak of the living greenwood — broad, lobed,
  * heavy with leaf. The opposite of the moor's dead limbs.
  * (34x41)
  */
-export const TREE_OAK = sprite(
+export const TREE_OAK = foliage(
   [
     ".......hghgh.gg....hghgh..g.g.....",
     "........hgggggk...hgggkgggkgkg....",
@@ -61,7 +61,7 @@ export const TREE_OAK = sprite(
  * A birch: pale marked bole, airy crown you can see sky through.
  * (20x38)
  */
-export const TREE_BIRCH = sprite(
+export const TREE_BIRCH = foliage(
   [
     ".......hg.gg........",
     "........ggkg........",
@@ -109,7 +109,7 @@ export const TREE_BIRCH = sprite(
  * A living conifer, dense and tiered.
  * (21x42)
  */
-export const TREE_PINE_LIVE = sprite(
+export const TREE_PINE_LIVE = foliage(
   [
     "..........k..........",
     ".........kgg.........",
@@ -161,7 +161,7 @@ export const TREE_PINE_LIVE = sprite(
  * A low leafy shrub.
  * (16x10)
  */
-export const BUSH = sprite(
+export const BUSH = foliage(
   [
     "....gh.....h....",
     ".......hk..h....",
