@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:rpg-art": "node scripts/build-rpg-pixel-art.mjs",
     "start": "next start",
     "lint": "eslint"
   },

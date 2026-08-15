@@ -2,8 +2,9 @@
 // through the keep gate into the dark. Fixed-timestep update, render every
 // animation frame.
 
-import { WRAITH } from "@/lib/rpg/assets";
 import { DENIZENS, roam } from "@/lib/rpg/denizens";
+import { deathBillboard, type DeathStyle } from "@/lib/rpg/death";
+import { REFERENCE_WRAITH } from "@/lib/rpg/reference-art.generated";
 import {
   actorInReach,
   wrapText,
@@ -16,6 +17,7 @@ import {
   TOWER_INTERIOR,
   entryOf,
   floorHeightAt,
+  interiorRayRange,
   onExit,
   resolveInteriorMove,
   type Interior,
@@ -28,11 +30,17 @@ import {
   resolveRoofMove,
   roofEntry,
 } from "@/lib/rpg/roof";
-import type { Billboard, CameraState } from "@/lib/rpg/projection";
 import {
+  forward,
+  type Billboard,
+  type CameraState,
+} from "@/lib/rpg/projection";
+import {
+  drawLightning,
   drawOverlay,
   renderFrame,
   type HudState,
+  type LightningState,
   type OverlayState,
 } from "@/lib/rpg/render";
 import { Screen } from "@/lib/rpg/screen";
@@ -43,6 +51,7 @@ import {
   GROVE_POS,
   HENGE_POS,
   KEEP_POS,
+  VILLAGE_POS,
   DEAD_WOOD_X,
   resolveMove,
 } from "@/lib/rpg/world";
@@ -53,15 +62,10 @@ export interface InputState {
   left: boolean;
   right: boolean;
   boost: boolean;
-  /** Radians of pending mouse yaw, consumed each update (pointer-locked). */
-  mouseYaw: number;
-  /**
-   * Cursor offset from screen centre, -1..1, used when pointer lock is
-   * unavailable (embedded panes refuse it) — steer toward the cursor.
-   */
-  aim: number;
   /** Edge-triggered: set on key-down, cleared once the game consumes it. */
   interact: boolean;
+  /** Edge-triggered: cast the selected spell straight ahead. */
+  fire: boolean;
   /** Edge-triggered: opens or closes the area map. */
   toggleMap: boolean;
 }
@@ -73,19 +77,22 @@ export function emptyInput(): InputState {
     left: false,
     right: false,
     boost: false,
-    mouseYaw: 0,
-    aim: 0,
     interact: false,
+    fire: false,
     toggleMap: false,
   };
 }
 
 const TURN_RATE = 2.3; // rad/s
-const AIM_RATE = 2.0; // rad/s at full cursor deflection
 const GLIDE_SPEED = 78; // world units/s
 const BOOST_SPEED = 140;
 const REVERSE_SPEED = 40;
 const ACCEL = 240;
+const LIGHTNING_RANGE = 220;
+const LIGHTNING_HALF_WIDTH = 30;
+const LIGHTNING_DAMAGE = 34;
+const ENEMY_MAX_ENERGY = 100;
+const FIRE_COOLDOWN = 0.2;
 /** From the leads, the keep is under your feet — never in front of you. */
 const OMIT_ON_ROOF: ReadonlySet<string> = new Set(["keep"]);
 
@@ -93,9 +100,24 @@ const OMIT_ON_ROOF: ReadonlySet<string> = new Set(["keep"]);
 const INDOOR_SCALE = 0.85;
 
 interface Wraith extends Billboard {
+  id: string;
+  hostile: true;
+  deathStyle: "spirit";
   originX: number;
   originY: number;
   phase: number;
+}
+
+interface CombatTarget extends Billboard {
+  id: string;
+  deathStyle: DeathStyle;
+}
+
+interface DeathState {
+  actor: Billboard;
+  at: number;
+  style: DeathStyle;
+  scope: string;
 }
 
 /** Where the player stands when stepping back out of a site. */
@@ -121,21 +143,27 @@ export class Game {
 
   private readonly wraiths: Wraith[] = [
     {
+      id: "wraith-1",
+      hostile: true,
+      deathStyle: "spirit",
       x: -70,
       y: 480,
       originX: -70,
       originY: 480,
       phase: 0,
-      sprite: WRAITH,
+      sprite: REFERENCE_WRAITH,
       height: 26,
     },
     {
+      id: "wraith-2",
+      hostile: true,
+      deathStyle: "spirit",
       x: 180,
       y: 900,
       originX: 180,
       originY: 900,
       phase: 2.4,
-      sprite: WRAITH,
+      sprite: REFERENCE_WRAITH,
       height: 26,
     },
   ];
@@ -161,12 +189,28 @@ export class Game {
   private talk: { name: string; pages: string[][]; page: number } | null = null;
   /** A transient line — "YOU TAKE THE TORC" — and when it expires. */
   private notice: { text: string; until: number } | null = null;
+  /** Combatants only; peaceful actors never acquire a health bar. */
+  private readonly enemyEnergy = new Map<string, number>();
+  private readonly enemyDeaths = new Map<string, DeathState>();
+  private lightning: LightningState | null = null;
+  private nextFireAt = 0;
+  private shotSeed = 0;
+
+  constructor() {
+    for (const d of DENIZENS) {
+      if (d.hostile) this.enemyEnergy.set(d.id, ENEMY_MAX_ENERGY);
+    }
+    for (const w of this.wraiths) this.enemyEnergy.set(w.id, ENEMY_MAX_ENERGY);
+  }
 
   update(dt: number, input: InputState): void {
     this.t += dt;
+    if (this.lightning && this.t >= this.lightning.until) this.lightning = null;
 
     const pressed = input.interact;
     input.interact = false;
+    const fired = input.fire;
+    input.fire = false;
 
     // The map is modal: opening it stops the world, as the spellbook does.
     if (input.toggleMap) {
@@ -189,9 +233,6 @@ export class Game {
       return;
     }
 
-    this.cam.yaw += input.mouseYaw;
-    input.mouseYaw = 0;
-    this.cam.yaw += input.aim * AIM_RATE * dt;
     if (input.left) this.cam.yaw -= TURN_RATE * dt;
     if (input.right) this.cam.yaw += TURN_RATE * dt;
 
@@ -209,11 +250,14 @@ export class Game {
 
     const nextX = this.cam.x + Math.sin(this.cam.yaw) * this.speed * dt;
     const nextY = this.cam.y + Math.cos(this.cam.yaw) * this.speed * dt;
-    const moved = this.onRoof
+    let moved = this.onRoof
       ? resolveRoofMove(nextX, nextY)
       : this.interior
         ? resolveInteriorMove(this.interior, this.cam.x, this.cam.y, nextX, nextY)
         : resolveMove(this.cam.x, this.cam.y, nextX, nextY);
+    if (!this.interior && !this.onRoof) {
+      moved = this.resolveWyrmMove(this.cam.x, this.cam.y, moved.x, moved.y);
+    }
     if (moved.x === this.cam.x && moved.y === this.cam.y) this.speed = 0;
     this.cam.x = moved.x;
     this.cam.y = moved.y;
@@ -226,6 +270,7 @@ export class Game {
         : 0;
 
     this.checkDoorways();
+    if (fired) this.tryFire();
     if (pressed) this.tryInteract();
 
     for (const w of this.wraiths) {
@@ -235,13 +280,116 @@ export class Game {
     roam(DENIZENS, this.t);
   }
 
+  /** Keep the camera outside the wyrm's near plane and slide around its body. */
+  private resolveWyrmMove(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+  ): { x: number; y: number } {
+    const wyrm = DENIZENS.find((d) => d.id === "wyrm");
+    if (!wyrm) return { x: toX, y: toY };
+    const clear = (x: number, y: number) => {
+      const dx = x - wyrm.x;
+      const dy = y - wyrm.y;
+      return dx * dx + dy * dy >= 66 * 66;
+    };
+    if (clear(toX, toY)) return { x: toX, y: toY };
+    if (clear(toX, fromY)) return { x: toX, y: fromY };
+    if (clear(fromX, toY)) return { x: fromX, y: toY };
+    return { x: fromX, y: fromY };
+  }
+
+  private scope(): string {
+    if (this.onRoof) return "roof";
+    return this.interior?.id ?? "world";
+  }
+
+  /** Cast one short-lived bolt and damage the nearest hostile in its lane. */
+  private tryFire(): void {
+    if (this.t < this.nextFireAt) return;
+    this.nextFireAt = this.t + FIRE_COOLDOWN;
+
+    const { fx, fy } = forward(this.cam.yaw);
+    const outdoorTargets: CombatTarget[] = [
+      ...DENIZENS.filter((d) => d.hostile).map((d) => ({
+        ...d,
+        deathStyle: "corporeal" as const,
+      })),
+      ...this.wraiths,
+    ];
+    const indoorTargets: CombatTarget[] = (this.interior?.actors ?? [])
+      .filter((actor) => (actor as Actor & { hostile?: boolean }).hostile)
+      .map((actor) => ({
+        ...actor,
+        deathStyle:
+          (actor as Actor & { deathStyle?: DeathStyle }).deathStyle ?? "corporeal",
+      }));
+    const targets = this.interior ? indoorTargets : outdoorTargets;
+    const range = this.interior
+      ? interiorRayRange(
+          this.interior,
+          this.cam.x,
+          this.cam.y,
+          this.cam.yaw,
+          LIGHTNING_RANGE,
+        )
+      : LIGHTNING_RANGE;
+    let hit: CombatTarget | null = null;
+    let hitDepth = range + 1;
+    for (const target of targets) {
+      if (this.enemyDeaths.has(target.id)) continue;
+      const dx = target.x - this.cam.x;
+      const dy = target.y - this.cam.y;
+      const along = dx * fx + dy * fy;
+      if (along < 18 || along > range || along >= hitDepth) continue;
+      const lateral = Math.abs(dx * fy - dy * fx);
+      const targetRadius = Math.max(LIGHTNING_HALF_WIDTH, target.height * 0.45);
+      if (lateral <= targetRadius) {
+        hit = target;
+        hitDepth = along;
+      }
+    }
+
+    let endX = this.cam.x + fx * range;
+    let endY = this.cam.y + fy * range;
+    let endHeight = 18;
+    if (hit) {
+      endX = hit.x;
+      endY = hit.y;
+      endHeight = (hit.elevate ?? 0) + hit.height * 0.66;
+      const energy = Math.max(
+        0,
+        (this.enemyEnergy.get(hit.id) ?? ENEMY_MAX_ENERGY) - LIGHTNING_DAMAGE,
+      );
+      this.enemyEnergy.set(hit.id, energy);
+      if (energy === 0) {
+        this.enemyDeaths.set(hit.id, {
+          actor: { ...hit },
+          at: this.t,
+          style: hit.deathStyle,
+          scope: this.scope(),
+        });
+      }
+    }
+
+    this.lightning = {
+      x: endX,
+      y: endY,
+      height: endHeight,
+      hit: hit !== null,
+      seed: ++this.shotSeed,
+      until: this.t + 0.17,
+    };
+  }
+
   /** The actor the mage is close enough to act on, indoors, out, or aloft. */
   private nearby(): Actor | null {
     const actors = this.onRoof
       ? ROOF_ACTORS
       : this.interior
         ? this.interior.actors
-        : DENIZENS;
+        : DENIZENS.filter((d) => !this.enemyDeaths.has(d.id));
     return actorInReach(actors, this.cam.x, this.cam.y, this.taken);
   }
 
@@ -350,14 +498,14 @@ export class Game {
     // round to the back of the keep.
     const inGate =
       Math.abs(this.cam.x - KEEP_POS.x) < GATE.halfW &&
-      this.cam.y > KEEP_POS.y - GATE.trigger &&
-      this.cam.y < KEEP_POS.y + GATE.trigger;
+      this.cam.y > GATE.y - GATE.trigger &&
+      this.cam.y < GATE.y + GATE.trigger;
     if (inGate) {
       if (!this.transitionLock) {
         // Step back out facing away from the keep, clear of the arch.
         this.doorstep = {
           x: KEEP_POS.x,
-          y: KEEP_POS.y - GATE.depth - 24,
+          y: GATE.doorstepY,
           yaw: Math.PI,
         };
         this.interior = KEEP_INTERIOR;
@@ -379,6 +527,7 @@ export class Game {
     const near = (p: { x: number; y: number }, r: number) =>
       Math.abs(this.cam.x - p.x) < r && Math.abs(this.cam.y - p.y) < r;
     if (near(KEEP_POS, 300)) return "THE KEEP";
+    if (near(VILLAGE_POS, 210)) return "THE VILLAGE";
     if (near(HENGE_POS, 260)) return "THE HENGE";
     if (near(GROVE_POS, 210)) return "THE GROVE";
     if (near(CIRCLE_POS, 160)) return "STONE CIRCLE";
@@ -399,11 +548,16 @@ export class Game {
       return;
     }
     this.hud.plan = undefined;
-    this.hud.blips = DENIZENS.map((d) => ({
-      x: d.x,
-      y: d.y,
-      hostile: d.hostile,
-    }));
+    this.hud.blips = [
+      ...DENIZENS.filter((d) => !this.enemyDeaths.has(d.id)).map((d) => ({
+        x: d.x,
+        y: d.y,
+        hostile: d.hostile,
+      })),
+      ...this.wraiths
+        .filter((w) => !this.enemyDeaths.has(w.id))
+        .map((w) => ({ x: w.x, y: w.y, hostile: true })),
+    ];
   }
 
   render(screen: Screen): void {
@@ -412,7 +566,7 @@ export class Game {
     // prompt uses, so the two can never disagree about what you are near.
     const near = this.talk ? null : this.nearby();
     const halo = <T extends Actor>(a: T) =>
-      a.id === near?.id ? { ...a, highlight: true } : a;
+      a.id === near?.id && a.id !== "wyrm" ? { ...a, highlight: true } : a;
     this.refreshPanel();
     if (this.mapOpen) {
       drawAreaMap(screen, this.cam, this.hud.place);
@@ -430,24 +584,70 @@ export class Game {
         overlay,
         OMIT_ON_ROOF,
         ROOF_PLATFORM,
+        this.lightning ?? undefined,
       );
       return;
     }
     if (this.interior) {
       const visible = this.interior.actors
-        .filter((a) => !this.taken.has(a.id))
+        .filter((a) => !this.taken.has(a.id) && !this.enemyDeaths.has(a.id))
         .map(halo);
-      renderInterior(screen, this.interior, this.cam, [], this.t, visible);
+      renderInterior(
+        screen,
+        this.interior,
+        this.cam,
+        this.deathEntities(),
+        this.t,
+        visible,
+      );
+      if (this.lightning) drawLightning(screen, this.cam, this.t, this.lightning);
       drawOverlay(screen, this.hud, this.t, overlay, this.cam);
       return;
     }
+    const visibleWraiths = this.wraiths
+      .filter((w) => !this.enemyDeaths.has(w.id))
+      .map((w) => ({
+        ...w,
+        energy: this.inZapRange(w)
+          ? (this.enemyEnergy.get(w.id) ?? ENEMY_MAX_ENERGY) / ENEMY_MAX_ENERGY
+          : undefined,
+      }));
+    const visibleDenizens = DENIZENS.filter((d) => !this.enemyDeaths.has(d.id)).map((d) =>
+      halo(
+        d.hostile && this.inZapRange(d)
+          ? {
+              ...d,
+              energy:
+                (this.enemyEnergy.get(d.id) ?? ENEMY_MAX_ENERGY) / ENEMY_MAX_ENERGY,
+            }
+          : d,
+      ),
+    );
     renderFrame(
       screen,
       this.cam,
-      [...this.wraiths, ...DENIZENS.map(halo)],
+      [...visibleWraiths, ...visibleDenizens, ...this.deathEntities()],
       this.hud,
       this.t,
       overlay,
+      undefined,
+      undefined,
+      this.lightning ?? undefined,
     );
+  }
+
+  private inZapRange(actor: Billboard): boolean {
+    return Math.hypot(actor.x - this.cam.x, actor.y - this.cam.y) <= LIGHTNING_RANGE;
+  }
+
+  private deathEntities(): Billboard[] {
+    const scope = this.scope();
+    const entities: Billboard[] = [];
+    for (const death of this.enemyDeaths.values()) {
+      if (death.scope !== scope) continue;
+      const entity = deathBillboard(death.actor, death.at, this.t, death.style);
+      if (entity) entities.push(entity);
+    }
+    return entities;
   }
 }

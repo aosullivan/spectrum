@@ -2,7 +2,7 @@
 // that is what makes gliding through the keep gate feel continuous rather
 // than like two different games stitched together.
 
-import { BC, BW, C, K } from "@/lib/rpg/palette";
+import { BC, BG, BR, BW, BY, C, K } from "@/lib/rpg/palette";
 import { HORIZON, HUD_TOP, SCREEN_W, type Screen, type Sprite } from "@/lib/rpg/screen";
 
 /** Distance from eye to projection plane, in pixels. */
@@ -68,6 +68,8 @@ export interface Billboard {
   height: number;
   /** Landmarks keep a minimum on-screen size and never dither. */
   landmark?: boolean;
+  /** Keep very large actors framed at interaction range. */
+  maxScreenHeight?: number;
   /** Detail levels, best first, chosen by on-screen pixel height. */
   lod?: ReadonlyArray<{ minH: number; sprite: Sprite }>;
   /** World units above the floor — how a sconce hangs on a wall. */
@@ -89,6 +91,8 @@ export interface Billboard {
   glow?: boolean;
   /** Within arm's reach — draw it haloed, so "now" is unmistakable. */
   highlight?: boolean;
+  /** Remaining hostile energy, 0..1. Omitted for non-combatants. */
+  energy?: number;
 }
 
 /**
@@ -122,8 +126,10 @@ export function collectBillboards(
     h: number;
     sprite: Sprite;
     landmark?: boolean;
+    framedAtHud?: boolean;
     glow?: boolean;
     highlight?: boolean;
+    energy?: number;
   }[] = [];
 
   for (const it of items) {
@@ -137,8 +143,16 @@ export function collectBillboards(
     const screenX = 128 + (lat * FOCAL) / z;
     if (screenX < -80 || screenX > SCREEN_W + 80) continue;
     let h = (it.height * FOCAL) / z;
-    if (it.landmark) h = Math.max(h, 7);
-    else if (h < 1.5 || h > HUD_TOP * 2.5) continue;
+    let framedAtHud = false;
+    if (it.landmark) {
+      h = Math.max(h, 7);
+    } else if (h < 1.5 || h > HUD_TOP * 2.5) {
+      continue;
+    }
+    if (it.maxScreenHeight !== undefined && h > it.maxScreenHeight) {
+      h = it.maxScreenHeight;
+      framedAtHud = true;
+    }
     let sprite = it.sprite;
     if (it.frames && it.frames.length > 0) {
       const step = Math.floor(t * (it.fps ?? 7)) % it.frames.length;
@@ -155,7 +169,9 @@ export function collectBillboards(
     // Elevated props hang above the floor — a sconce on a wall, not a lamp
     // standing on the flags. `stands` lifts the whole prop to a storey, so
     // battlements on the roof sit at roof height rather than in the mud.
-    const baseY = groundRow(z, eyeY) - (((it.elevate ?? 0) + (it.stands ?? 0)) * FOCAL) / z;
+    const baseY =
+      groundRow(z, eyeY) -
+      (((it.elevate ?? 0) + (it.stands ?? 0)) * FOCAL) / z;
     drawn.push({
       z,
       screenX,
@@ -163,14 +179,21 @@ export function collectBillboards(
       h,
       sprite,
       landmark: it.landmark,
+      framedAtHud,
       glow: it.glow,
       highlight: it.highlight,
+      energy: it.energy,
     });
   }
 
   return drawn.map((it) => {
     const w = (it.h * it.sprite.w) / it.sprite.h;
-    const footY = Math.min(it.baseY, HUD_TOP);
+    // Ordinary props continue below the HUD as the player passes them. A
+    // deliberately height-capped actor stays fully framed once the cap is
+    // reached; otherwise the HUD hides more of it and creates false shrinkage.
+    const footY = it.framedAtHud
+      ? Math.max(it.h + 2, Math.min(it.baseY, HUD_TOP))
+      : it.baseY;
     // Far billboards dissolve into the dark like the terrain does — but
     // landmarks never do: they already swap to low-detail LOD art at range,
     // and a dithered castle reads as noise instead of a destination.
@@ -184,9 +207,34 @@ export function collectBillboards(
           drawHalo(s, it.sprite, it.screenX, footY, w, it.h, depth, it.z);
         }
         s.blitScaled(it.sprite, it.screenX, footY, w, it.h, dither, undefined, depth, it.z);
+        if (it.energy !== undefined) {
+          drawEnergyBar(s, it.screenX, footY - it.h - 5, w, it.energy);
+        }
       },
     };
   });
+}
+
+function drawEnergyBar(
+  s: Screen,
+  cx: number,
+  top: number,
+  spriteWidth: number,
+  energy: number,
+): void {
+  if (top < 1 || top >= HUD_TOP - 5) return;
+  const innerW = Math.max(8, Math.min(28, Math.round(spriteWidth)));
+  const x = Math.round(cx - innerW / 2) - 1;
+  const y = Math.round(top);
+  const value = Math.max(0, Math.min(1, energy));
+  const fill = Math.round(innerW * value);
+  const ink = value > 0.55 ? BG : value > 0.25 ? BY : BR;
+  s.rect(x, y, innerW + 2, 5, K);
+  s.rect(x, y, innerW + 2, 1, BW);
+  s.rect(x, y + 4, innerW + 2, 1, BW);
+  s.px(x, y + 2, BW);
+  s.px(x + innerW + 1, y + 2, BW);
+  if (fill > 0) s.rect(x + 1, y + 1, fill, 3, ink);
 }
 
 /**

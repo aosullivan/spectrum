@@ -13,6 +13,7 @@ import {
   HENGE_POS,
   KEEP_POS,
   DEAD_WOOD_X,
+  VILLAGE_POS,
 } from "@/lib/rpg/world";
 
 /** The charted region. Beyond it the map has nothing to say. */
@@ -47,6 +48,7 @@ const PLACES = [
   { pos: CIRCLE_POS, name: "STONE CIRCLE", side: -1, dy: 0 },
   { pos: GROVE_POS, name: "THE GROVE", side: 1, dy: -6 },
   { pos: HENGE_POS, name: "THE HENGE", side: 1, dy: 0 },
+  { pos: VILLAGE_POS, name: "THE VILLAGE", side: 1, dy: 0 },
 ];
 
 /** A tower glyph for a built place; a ring of stones for the old ones. */
@@ -125,7 +127,7 @@ export function drawAreaMap(
   // Places, and their names.
   for (const p of PLACES) {
     const { px, py } = plot(p.pos.x, p.pos.y);
-    drawPlaceMark(s, px, py, p.name === "THE KEEP");
+    drawPlaceMark(s, px, py, p.name === "THE KEEP" || p.name === "THE VILLAGE");
     const width = textWidth(p.name, 1);
     const lx =
       p.side > 0

@@ -3,18 +3,25 @@
 // the friendly ones carry something to say.
 
 import {
-  DRAGON,
   ELF_ARCHER,
-  GHOUL,
-  GOBLIN,
-  ORC,
   NPC_HERMIT,
   SPIDER,
   WATER_SPIRIT,
 } from "@/lib/rpg/bestiary";
 import { SPIRIT_WISP } from "@/lib/rpg/flora";
 import type { Actor } from "@/lib/rpg/interact";
+import {
+  REFERENCE_BRUTE,
+  REFERENCE_DRAGON,
+  REFERENCE_GOBLIN,
+  REFERENCE_SKELETON,
+} from "@/lib/rpg/reference-art.generated";
 import { GROVE_POS, HENGE_POS } from "@/lib/rpg/world";
+import {
+  VILLAGE_INNKEEPER,
+  VILLAGE_POS,
+  VILLAGE_WANDERER,
+} from "@/lib/rpg/village";
 
 export interface Denizen extends Actor {
   /** Home ground; the creature orbits this point. */
@@ -33,8 +40,8 @@ function denizen(d: Omit<Denizen, "x" | "y">): Denizen {
   return { ...d, x: d.originX, y: d.originY };
 }
 
-/** The dragon's home ground: west of the leyline, in sight of the start. */
-export const DRAGON_HOME = { x: -340, y: 300 };
+/** The dragon holds its ground beside the leyline. */
+export const DRAGON_HOME = { x: 0, y: 210 };
 /** The elves keep to a grove east of the line. */
 const GROVE = { x: 380, y: 150 };
 
@@ -43,13 +50,14 @@ export const DENIZENS: Denizen[] = [
     id: "wyrm",
     originX: DRAGON_HOME.x,
     originY: DRAGON_HOME.y,
-    roamX: 150,
-    roamY: 90,
+    roamX: 0,
+    roamY: 0,
     rate: 0.11,
     phase: 0,
     hostile: false,
-    sprite: DRAGON,
-    height: 118,
+    sprite: REFERENCE_DRAGON,
+    height: 155,
+    maxScreenHeight: 132,
     reach: 96,
     label: "GREET THE WYRM",
     interaction: {
@@ -135,6 +143,51 @@ export const DENIZENS: Denizen[] = [
     },
   }),
 
+  denizen({
+    id: "village-innkeeper",
+    originX: VILLAGE_POS.x + 42,
+    originY: VILLAGE_POS.y + 5,
+    roamX: 18,
+    roamY: 13,
+    rate: 0.17,
+    phase: 0.4,
+    hostile: false,
+    sprite: VILLAGE_INNKEEPER,
+    height: 25,
+    reach: 42,
+    label: "SPEAK TO THE INNKEEPER",
+    interaction: {
+      kind: "talk",
+      name: "THE INNKEEPER",
+      lines: [
+        "THE LANTERN IS LIT, BUT THE COMMON ROOM IS QUIET. FOLK HAVE HEARD THINGS MOVING BY THE KEEP.",
+        "YOU MAY FIND A BED HERE WHEN THE DOOR IS OPEN. FOR NOW, STAY ON THE LANE AND MIND THE WELL.",
+      ],
+    },
+  }),
+  denizen({
+    id: "village-wanderer",
+    originX: VILLAGE_POS.x - 52,
+    originY: VILLAGE_POS.y - 73,
+    roamX: 33,
+    roamY: 24,
+    rate: 0.14,
+    phase: 2.2,
+    hostile: false,
+    sprite: VILLAGE_WANDERER,
+    height: 24,
+    reach: 40,
+    label: "SPEAK TO THE VILLAGER",
+    interaction: {
+      kind: "talk",
+      name: "A VILLAGER",
+      lines: [
+        "THE EAST COTTAGE IS MINE. THE OTHER BELONGS TO MY SISTER, THOUGH SHE HAS GONE TO THE GROVE.",
+        "THE RED WYRM WILL TALK YOUR EAR OFF, BUT IT HAS NEVER HARMED THIS VILLAGE. THE MOOR-THINGS ARE WORSE.",
+      ],
+    },
+  }),
+
   // The lady of the sacred pool. She rises where the water is stillest.
   denizen({
     id: "pool-lady",
@@ -189,13 +242,13 @@ export const DENIZENS: Denizen[] = [
 
   // And the things that crawl.
   ...([
-    { id: "gob-1", x: 210, y: 620, s: GOBLIN, h: 19, p: 0.0 },
-    { id: "gob-2", x: 262, y: 668, s: GOBLIN, h: 18, p: 1.3 },
-    { id: "gob-3", x: -180, y: 830, s: GOBLIN, h: 19, p: 2.6 },
-    { id: "orc-1", x: -110, y: 1030, s: ORC, h: 26, p: 0.4 },
-    { id: "orc-2", x: 120, y: 1120, s: ORC, h: 27, p: 3.1 },
-    { id: "ghoul-1", x: 40, y: 760, s: GHOUL, h: 23, p: 1.9 },
-    { id: "ghoul-2", x: -240, y: 1180, s: GHOUL, h: 22, p: 0.8 },
+    { id: "gob-1", x: 210, y: 620, s: REFERENCE_GOBLIN, h: 19, p: 0.0 },
+    { id: "gob-2", x: 262, y: 668, s: REFERENCE_GOBLIN, h: 18, p: 1.3 },
+    { id: "gob-3", x: -180, y: 830, s: REFERENCE_GOBLIN, h: 19, p: 2.6 },
+    { id: "orc-1", x: -110, y: 1030, s: REFERENCE_BRUTE, h: 26, p: 0.4 },
+    { id: "orc-2", x: 120, y: 1120, s: REFERENCE_BRUTE, h: 27, p: 3.1 },
+    { id: "ghoul-1", x: 40, y: 760, s: REFERENCE_SKELETON, h: 23, p: 1.9 },
+    { id: "ghoul-2", x: -240, y: 1180, s: REFERENCE_SKELETON, h: 22, p: 0.8 },
     { id: "spider-1", x: -430, y: 560, s: SPIDER, h: 14, p: 2.2 },
     { id: "spider-2", x: -520, y: 720, s: SPIDER, h: 15, p: 0.3 },
     { id: "spider-3", x: 300, y: 940, s: SPIDER, h: 14, p: 1.1 },

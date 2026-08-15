@@ -10,7 +10,7 @@
 // what sells it: circle the keep and its walls change brightness because
 // their orientation to the light is a property of the world, not of you.
 
-import { BW, K, W } from "@/lib/rpg/palette";
+import { BC, BW, K, W } from "@/lib/rpg/palette";
 import {
   CAM_HEIGHT,
   FOCAL,
@@ -32,6 +32,8 @@ export interface Box {
   /** Heights above the ground plane. */
   base: number;
   top: number;
+  /** Optional world-anchored surface treatment. */
+  detail?: "wall" | "tower" | "gate" | "door" | "timber" | "timberDoor" | "roof";
 }
 
 /** Nothing nearer than this is projected; it would be behind the eye. */
@@ -124,6 +126,143 @@ function paintPolygon(
   }
 }
 
+function drawLine(
+  s: Screen,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  colour: number,
+): void {
+  let x = Math.round(x0);
+  let y = Math.round(y0);
+  const tx = Math.round(x1);
+  const ty = Math.round(y1);
+  const dx = Math.abs(tx - x);
+  const sx = x < tx ? 1 : -1;
+  const dy = -Math.abs(ty - y);
+  const sy = y < ty ? 1 : -1;
+  let error = dx + dy;
+  while (true) {
+    s.px(x, y, colour);
+    if (x === tx && y === ty) break;
+    const twice = error * 2;
+    if (twice >= dy) {
+      error += dy;
+      x += sx;
+    }
+    if (twice <= dx) {
+      error += dx;
+      y += sy;
+    }
+  }
+}
+
+/** Stone courses, staggered joints, quoins and arrow slits on one wall face. */
+function paintFaceDetail(
+  s: Screen,
+  box: Box,
+  edge: readonly [number, number][],
+  toCam: (wx: number, wy: number, h: number) => CamPoint,
+  faceDepth: number,
+): void {
+  if (!box.detail || faceDepth > 900) return;
+  const [a, b] = edge;
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const point = (along: number, height: number) => {
+    const p = toCam(
+      a[0] + (b[0] - a[0]) * along,
+      a[1] + (b[1] - a[1]) * along,
+      height,
+    );
+    if (p.z < NEAR) return null;
+    return { x: 128 + (p.lat * FOCAL) / p.z, y: heightRow(p.h, p.z) };
+  };
+  const stroke = (
+    fromAlong: number,
+    fromHeight: number,
+    toAlong: number,
+    toHeight: number,
+    colour: number,
+  ) => {
+    const from = point(fromAlong, fromHeight);
+    const to = point(toAlong, toHeight);
+    if (from && to) drawLine(s, from.x, from.y, to.x, to.y, colour);
+  };
+
+  if (box.detail === "door" || box.detail === "timberDoor") {
+    // Ignore the thin door's edge faces. Its broad face is a dark oak slab
+    // picked out with pale planks and a cyan ward, not another stone panel.
+    if (length < box.w * 0.75) return;
+    for (let d = 8; d < length; d += 9) {
+      stroke(d / length, box.base + 3, d / length, box.top - 3, W);
+    }
+    stroke(0.03, box.base + 18, 0.97, box.base + 18, BW);
+    stroke(0.03, box.base + 48, 0.97, box.base + 48, BW);
+    if (box.detail === "door") {
+      stroke(0.5, box.base + 25, 0.38, box.base + 35, BC);
+      stroke(0.38, box.base + 35, 0.5, box.base + 45, BC);
+      stroke(0.5, box.base + 45, 0.62, box.base + 35, BC);
+      stroke(0.62, box.base + 35, 0.5, box.base + 25, BC);
+    }
+    return;
+  }
+
+  if (box.detail === "timber") {
+    stroke(0.02, box.base + 7, 0.98, box.base + 7, BW);
+    stroke(0.02, box.top - 7, 0.98, box.top - 7, BW);
+    for (const along of [0.22, 0.5, 0.78]) {
+      stroke(along, box.base + 5, along, box.top - 5, BW);
+    }
+    stroke(0.03, box.base + 9, 0.49, box.top - 9, W);
+    stroke(0.49, box.top - 9, 0.97, box.base + 9, W);
+    stroke(0.03, box.top - 9, 0.49, box.base + 9, W);
+    stroke(0.49, box.base + 9, 0.97, box.top - 9, W);
+    return;
+  }
+
+  if (box.detail === "roof") {
+    for (let d = 7; d < length; d += 10) {
+      const along = d / length;
+      stroke(along, box.base + 1, along, box.top - 1, W);
+    }
+    stroke(0.01, box.base + 2, 0.99, box.base + 2, K);
+    stroke(0.01, box.top - 2, 0.99, box.top - 2, BW);
+    return;
+  }
+
+  const course = box.detail === "tower" ? 13 : 15;
+  let band = 0;
+  for (let h = box.base + course; h < box.top - 2; h += course) {
+    stroke(0.02, h, 0.98, h, K);
+    const offset = band % 2 === 0 ? 0 : 11;
+    for (let d = 22 + offset; d < length - 7; d += 22) {
+      const along = d / length;
+      stroke(along, h - course + 2, along, h - 2, K);
+    }
+    band++;
+  }
+
+  // Bright alternating corner stones keep tower edges readable against the
+  // black sky without filling the whole wall white.
+  for (let h = box.base + 8; h < box.top - 4; h += 18) {
+    stroke(0, h, 0.1, h, BW);
+    stroke(0.9, h + 7, 1, h + 7, BW);
+  }
+
+  if (box.detail === "tower" || box.detail === "gate") {
+    const slots = length > 54 ? [0.34, 0.66] : [0.5];
+    for (const along of slots) {
+      const spread = Math.min(0.035, 2 / length);
+      const low = box.base + Math.min(38, (box.top - box.base) * 0.34);
+      const high = Math.min(box.top - 15, low + 22);
+      stroke(along - spread, low, along - spread, high, BW);
+      stroke(along + spread, low, along + spread, high, BW);
+      stroke(along, low + 1, along, high - 1, K);
+    }
+  }
+}
+
 /**
  * Project every visible face of every box and return them as paint jobs,
  * each tagged with its depth so the caller can interleave them with sprites.
@@ -181,7 +320,17 @@ export function collectFaces(
         x: 128 + (p.lat * FOCAL) / p.z,
         y: heightRow(p.h, p.z),
       }));
-      out.push({ z, paint: (s) => paintPolygon(s, screen, level) });
+      out.push({
+        z,
+        paint: (s) => {
+          paintPolygon(
+            s,
+            screen,
+            b.detail === "door" || b.detail === "timberDoor" ? 0 : level,
+          );
+          paintFaceDetail(s, b, f.pts, toCam, z);
+        },
+      });
     }
 
     // The roof is only visible from above it. Drawing it while the eye is

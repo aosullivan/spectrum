@@ -2,7 +2,7 @@
 // pixel, '.' transparent. These are the lush counterpart to the dead moor
 // trees in art.ts — the two woods must never be mistaken for each other.
 
-import { C, G, K, W, BC, BG, BW } from "@/lib/rpg/palette";
+import { C, G, K, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
 import { sprite } from "@/lib/rpg/screen";
 
 /**
@@ -175,6 +175,41 @@ export const BUSH = sprite(
     "......g..g......",
   ],
   { g: G, h: BG, k: K },
+);
+
+/** A mossed fallen trunk, drawn as bright green line-work over black. */
+export const FALLEN_LOG = sprite(
+  [
+    "............................",
+    "....gggggggggggggggg........",
+    "..gggkkkkkkkkkkkkkkgg.......",
+    ".ggkkwkkkkkkkkkkkwkkgg......",
+    "ggkkkwwwkkkkkkkwwwkkkgg.....",
+    "gkkkkkkwkkkkkkkkkwkkkkg.....",
+    "ggkkkkkkkkkkkkkkkkkkkgg.....",
+    ".gggggggggggggggggggg......",
+    "...h...h.....h...h..........",
+    "..hhh.hh.....hh.hhh.........",
+    "............................",
+  ],
+  { g: G, h: BG, k: K, w: W },
+);
+
+/** Yellow caps and leaf-litter in a sparse woodland clump. */
+export const MUSHROOM_PATCH = sprite(
+  [
+    ".....................",
+    "...y...........y.....",
+    "..yyy....w....yyy....",
+    ".yYyyy..www..yyyYy...",
+    "...y.....w.....y.....",
+    "...w.....w.....w.....",
+    "g..w..g..w..g..w..g..",
+    ".gg..ggg...ggg..ggg..",
+    "g..g....g.g...g....g.",
+    ".....................",
+  ],
+  { g: G, w: W, y: Y, Y: BY },
 );
 
 /**

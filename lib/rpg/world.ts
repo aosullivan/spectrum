@@ -10,9 +10,11 @@ import {
   TREE_GNARLED_A,
   TREE_GNARLED_B,
 } from "@/lib/rpg/art";
-import { BOULDER, DOLMEN, STONE_L, STONE_M, STONE_S } from "@/lib/rpg/assets";
+import { DOLMEN, STONE_L, STONE_M, STONE_S } from "@/lib/rpg/assets";
 import {
   BUSH,
+  FALLEN_LOG,
+  MUSHROOM_PATCH,
   SARSEN_FALLEN,
   SARSEN_TALL,
   TREE_BIRCH,
@@ -23,11 +25,22 @@ import {
 import { B, BB, BC, BG, C, G, K, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
 import type { Box } from "@/lib/rpg/structures";
+import {
+  VILLAGE_BOXES,
+  VILLAGE_POS,
+  VILLAGE_PROPS,
+} from "@/lib/rpg/village";
+
+export { VILLAGE_POS } from "@/lib/rpg/village";
 
 // ------------------------------------------------------------------- places
 
 /** The keep the player can see from spawn and walk to. */
 export const KEEP_POS = { x: 0, y: 1400 };
+/** Shared exterior/interior footprint. */
+export const KEEP_SIZE = { width: 288, depth: 320 } as const;
+/** The visible south threshold where the leyline enters the keep. */
+export const KEEP_GATE_Y = KEEP_POS.y - KEEP_SIZE.depth / 2;
 /** A stone circle off the leyline — landmark and future save shrine. */
 export const CIRCLE_POS = { x: 300, y: 520 };
 /** The sacred grove: still water, living ground, and the lady who rises. */
@@ -85,6 +98,17 @@ export function groundColour(
     if (lush < 175) return BG;
   }
 
+  // --- village lane and yard: dense monochrome stipple like Wanderers ---
+  const vx = wx - VILLAGE_POS.x;
+  const vy = wy - VILLAGE_POS.y;
+  const villageSquare = Math.abs(vx) < 82 && Math.abs(vy) < 138;
+  const southLane = Math.abs(vx) < 17 && vy > -250 && vy < -100;
+  if (villageSquare || southLane) {
+    const cobble = hash(ix >> 1, iy >> 1);
+    if (cobble < 95 && (ix + iy) % 3 === 0) return W;
+    if ((iy & 15) === 0 && (ix & 7) < 3) return W;
+  }
+
   // --- the leyline: bright core, dithered fringe, shining to the horizon ---
   const ax = Math.abs(wx);
   if (wy < KEEP_POS.y) {
@@ -117,7 +141,7 @@ export function groundColour(
   // a few dashes on it. The old forest is exempt: it is dying.
   if (!woods) {
     const bed = hash(ix >> 1, iy >> 1);
-    const cover = greenwood ? 330 : 195;
+    const cover = greenwood ? 150 : 90;
     if (bed < cover && (ix + iy) % 2 === 0) {
       return bed < cover / 7 ? BG : G;
     }
@@ -129,7 +153,7 @@ export function groundColour(
   const ty = Math.floor(wy / cell);
   const th = hash(tx, ty);
   // The old forest is dying: barely any ground cover left under it.
-  const lively = woods ? 90 : greenwood ? 500 : 340;
+  const lively = woods ? 70 : greenwood ? 220 : 190;
   const density = footprint > 9 ? 25 : footprint > 3 ? 90 : lively;
   if (th < (footprint <= 3 ? lively : density)) {
     const px = tx * cell + (th % cell);
@@ -178,24 +202,41 @@ const chunkCache = new Map<string, Feature[]>();
 
 /**
  * The keep, as masonry rather than a poster: two towers, a curtain wall,
- * and a gatehouse built from two piers under a lintel — so the archway is
- * a real hole you can see through and fly into.
+ * and a gatehouse built from two piers under a lintel. A warded oak door
+ * closes the opening and marks the direct transition into the roofed hall.
  */
 export const KEEP_BOXES: readonly Box[] = [
-  { x: KEEP_POS.x - 72, y: KEEP_POS.y, w: 48, d: 48, base: 0, top: 120 },
-  { x: KEEP_POS.x + 72, y: KEEP_POS.y, w: 48, d: 48, base: 0, top: 104 },
-  { x: KEEP_POS.x, y: KEEP_POS.y + 6, w: 150, d: 28, base: 0, top: 76 },
-  { x: KEEP_POS.x - 27, y: KEEP_POS.y - 14, w: 26, d: 46, base: 0, top: 98 },
-  { x: KEEP_POS.x + 27, y: KEEP_POS.y - 14, w: 26, d: 46, base: 0, top: 98 },
-  { x: KEEP_POS.x, y: KEEP_POS.y - 14, w: 80, d: 46, base: 74, top: 98 },
-  // Crenellations: a merlon is just a small box on a parapet. The gap on
-  // the right tower is where the crown came down.
-  ...crenellate(KEEP_POS.x - 72, KEEP_POS.y, 48, 48, 120, 5),
-  ...crenellate(KEEP_POS.x + 72, KEEP_POS.y, 48, 48, 104, 5).filter(
+  // Four corner towers establish the same footprint as the nine-cell hall.
+  { x: KEEP_POS.x - 108, y: KEEP_POS.y - 124, w: 72, d: 72, base: 0, top: 120, detail: "tower" },
+  { x: KEEP_POS.x + 108, y: KEEP_POS.y - 124, w: 72, d: 72, base: 0, top: 104, detail: "tower" },
+  { x: KEEP_POS.x - 108, y: KEEP_POS.y + 124, w: 72, d: 72, base: 0, top: 108, detail: "tower" },
+  { x: KEEP_POS.x + 108, y: KEEP_POS.y + 124, w: 72, d: 72, base: 0, top: 96, detail: "tower" },
+  // Front wall split around a real 56-unit opening, plus the other sides.
+  { x: KEEP_POS.x - 86, y: KEEP_GATE_Y + 14, w: 116, d: 28, base: 0, top: 76, detail: "wall" },
+  { x: KEEP_POS.x + 86, y: KEEP_GATE_Y + 14, w: 116, d: 28, base: 0, top: 76, detail: "wall" },
+  { x: KEEP_POS.x, y: KEEP_POS.y + 146, w: 288, d: 28, base: 0, top: 76, detail: "wall" },
+  { x: KEEP_POS.x - 130, y: KEEP_POS.y, w: 28, d: 320, base: 0, top: 76, detail: "wall" },
+  { x: KEEP_POS.x + 130, y: KEEP_POS.y, w: 28, d: 320, base: 0, top: 76, detail: "wall" },
+  // Gatehouse piers project south of the wall; the lintel is high enough to
+  // pass beneath and is therefore absent from ground collision.
+  { x: KEEP_POS.x - 44, y: KEEP_GATE_Y - 9, w: 32, d: 46, base: 0, top: 98, detail: "gate" },
+  { x: KEEP_POS.x + 44, y: KEEP_GATE_Y - 9, w: 32, d: 46, base: 0, top: 98, detail: "gate" },
+  { x: KEEP_POS.x, y: KEEP_GATE_Y - 8, w: 52, d: 3, base: 0, top: 70, detail: "door" },
+  { x: KEEP_POS.x, y: KEEP_GATE_Y - 9, w: 120, d: 46, base: 74, top: 98, detail: "gate" },
+  // Crenellations use the same wall runs, so the silhouette follows the
+  // collision footprint rather than an unrelated facade.
+  ...crenellate(KEEP_POS.x - 108, KEEP_POS.y - 124, 72, 72, 120, 7),
+  ...crenellate(KEEP_POS.x + 108, KEEP_POS.y - 124, 72, 72, 104, 7).filter(
     (_, i) => i !== 1 && i !== 4,
   ),
-  ...crenellate(KEEP_POS.x, KEEP_POS.y + 6, 150, 28, 76, 11),
-  ...crenellate(KEEP_POS.x, KEEP_POS.y - 14, 80, 46, 98, 6),
+  ...crenellate(KEEP_POS.x - 108, KEEP_POS.y + 124, 72, 72, 108, 7),
+  ...crenellate(KEEP_POS.x + 108, KEEP_POS.y + 124, 72, 72, 96, 7),
+  ...crenellate(KEEP_POS.x - 86, KEEP_GATE_Y + 14, 116, 28, 76, 8),
+  ...crenellate(KEEP_POS.x + 86, KEEP_GATE_Y + 14, 116, 28, 76, 8),
+  ...crenellate(KEEP_POS.x, KEEP_POS.y + 146, 288, 28, 76, 18),
+  ...crenellateY(KEEP_POS.x - 130, KEEP_POS.y, 28, 320, 76, 20),
+  ...crenellateY(KEEP_POS.x + 130, KEEP_POS.y, 28, 320, 76, 20),
+  ...crenellate(KEEP_POS.x, KEEP_GATE_Y - 9, 120, 46, 98, 8),
 ];
 
 /** Merlons along the top of a box: the tooth-and-gap of a battlement. */
@@ -222,8 +263,41 @@ function crenellate(
   return out;
 }
 
+/** Merlons along a north/south wall. */
+function crenellateY(
+  cx: number,
+  cy: number,
+  w: number,
+  d: number,
+  top: number,
+  count: number,
+): Box[] {
+  const out: Box[] = [];
+  const pitch = d / count;
+  for (let i = 0; i < count; i += 2) {
+    out.push({
+      x: cx,
+      y: cy - d / 2 + pitch * (i + 0.5),
+      w,
+      d: pitch * 0.86,
+      base: top,
+      top: top + 9,
+    });
+  }
+  return out;
+}
+
 /** The fixed, hand-placed world: the stone circle and the henge. */
 const PLACED: Feature[] = [
+  ...VILLAGE_PROPS,
+  // Opening tableau: pale sarsens establish the near, middle, and far planes
+  // visible in the reference frame while remaining ordinary world objects.
+  { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
+  { x: -138, y: 236, sprite: SARSEN_TALL, height: 62 },
+  { x: 92, y: 244, sprite: MENHIR, height: 42 },
+  { x: -236, y: 410, sprite: SARSEN_TALL, height: 70 },
+  { x: 178, y: 390, sprite: SARSEN_TALL, height: 68 },
+
   { x: CIRCLE_POS.x, y: CIRCLE_POS.y, sprite: DOLMEN, height: 26 },
   { x: CIRCLE_POS.x - 34, y: CIRCLE_POS.y - 14, sprite: STONE_L, height: 18 },
   { x: CIRCLE_POS.x + 30, y: CIRCLE_POS.y - 10, sprite: MENHIR, height: 16 },
@@ -277,10 +351,10 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   const woods = baseX < WOODS_EDGE_X;
   const greenwood = baseX > GREENWOOD_EDGE_X;
   // A stand per wooded chunk, the odd lone tree out on the open moor.
-  const treeRolls = greenwood ? 5 : woods ? 4 : 1;
+  const treeRolls = greenwood ? 4 : woods ? 4 : 1;
   for (let i = 0; i < treeRolls; i++) {
     const h = hash(cx * 5 + i, cy * 7 + i * 3);
-    if (h < (greenwood ? 690 : woods ? 620 : 90)) {
+    if (h < (greenwood ? 520 : woods ? 620 : 90)) {
       const kind = h % 5;
       const living = greenwood
         ? kind < 2
@@ -303,9 +377,9 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
   }
   // Bracken and scrub, only where things still grow.
   if (greenwood) {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       const sh = hash((cx ^ 0x51ed) + i * 31, cy ^ 0x2f9a);
-      if (sh < 760) {
+      if (sh < 560) {
         out.push({
           x: baseX + (sh % CHUNK),
           y: baseY + ((sh >> 5) % CHUNK),
@@ -314,16 +388,27 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
         });
       }
     }
+    // Fallen timber and small bright fungi break the wood into authored
+    // clearings like the reference, rather than an even wall of tree cards.
+    const dh = hash(cx ^ 0x63d1, cy ^ 0x4ac7);
+    if (dh < 330) {
+      out.push({
+        x: baseX + ((dh * 3) % CHUNK),
+        y: baseY + ((dh * 7) % CHUNK),
+        sprite: dh < 190 ? FALLEN_LOG : MUSHROOM_PATCH,
+        height: dh < 190 ? 14 : 10,
+      });
+    }
   }
   // Boulders and lone stones, sparse everywhere.
   const bh = hash(cx ^ 0x9e37, cy ^ 0x79b9);
-  if (bh < 120) {
+  if (bh < 180) {
     const kind = bh % 3;
     out.push({
       x: baseX + (bh % CHUNK),
       y: baseY + ((bh >> 2) % CHUNK),
-      sprite: kind === 0 ? BOULDER : kind === 1 ? STONE_LEANING : STONE_S,
-      height: 6 + (bh % 4) * 2,
+      sprite: kind === 0 ? SARSEN_FALLEN : kind === 1 ? STONE_LEANING : MENHIR,
+      height: 8 + (bh % 5) * 2,
     });
   }
 
@@ -341,36 +426,25 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
 }
 
 /**
- * The gate is a hole in the keep's wall: glide into it and you are inside.
- * `depth` is how far the gap runs back through the wall; `trigger` is how
- * close to the keep's heart you must get before the scene cuts to the
- * interior — small, so you fly right under the arch first rather than being
- * swallowed while the castle is still ahead of you.
+ * Glide into the warded door and cross directly into the roofed hall.
+ * `trigger` is shallow so the transition happens at the timber threshold.
  */
-export const GATE = { halfW: 15, depth: 132, trigger: 26 } as const;
+export const GATE = {
+  halfW: 28,
+  y: KEEP_GATE_Y + 10,
+  trigger: 18,
+  doorstepY: KEEP_GATE_Y - 34,
+} as const;
 
 /**
  * Solid footprints the hero cannot glide through. The keep is a wall, not a
- * poster: you pull up at its facade — except at the gate, where `gapHalfW`
- * leaves the arch open.
+ * poster: you pull up at its facade, with only the scripted door passable.
  */
-const BLOCKERS: ReadonlyArray<{
-  x: number;
-  y: number;
-  halfW: number;
-  halfD: number;
-  gapHalfW?: number;
-}> = [
-  // Deep enough that pulling up at the wall frames the whole facade —
-  // towers and all — rather than pressing the player's nose against the gate.
-  {
-    x: KEEP_POS.x,
-    y: KEEP_POS.y,
-    halfW: 92,
-    halfD: GATE.depth,
-    gapHalfW: GATE.halfW,
-  },
-];
+const WORLD_COLLIDERS = [...KEEP_BOXES, ...VILLAGE_BOXES].filter(
+  (box) =>
+    box.base === 0 && box.detail !== "door" && box.detail !== "timberDoor",
+);
+const OUTDOOR_BODY_R = 10;
 
 /**
  * Slide a move against solid footprints: try the full move, then each axis
@@ -383,11 +457,10 @@ export function resolveMove(
   toY: number,
 ): { x: number; y: number } {
   const blocked = (x: number, y: number) =>
-    BLOCKERS.some(
-      (b) =>
-        Math.abs(x - b.x) < b.halfW &&
-        Math.abs(y - b.y) < b.halfD &&
-        !(b.gapHalfW !== undefined && Math.abs(x - b.x) < b.gapHalfW),
+    WORLD_COLLIDERS.some(
+      (box) =>
+        Math.abs(x - box.x) < box.w / 2 + OUTDOOR_BODY_R &&
+        Math.abs(y - box.y) < box.d / 2 + OUTDOOR_BODY_R,
     );
   if (!blocked(toX, toY)) return { x: toX, y: toY };
   if (!blocked(toX, fromY)) return { x: toX, y: fromY };

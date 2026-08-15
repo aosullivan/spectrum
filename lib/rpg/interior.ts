@@ -14,7 +14,7 @@ import {
   TORCH_FLAME_ALT,
   WALL_TORCH,
 } from "@/lib/rpg/props";
-import { ROOF_HATCH, STAIR_DOOR } from "@/lib/rpg/tower";
+import { ROOF_HATCH } from "@/lib/rpg/tower";
 import {
   CAM_BACK,
   CAM_HEIGHT,
@@ -38,7 +38,7 @@ import {
 } from "@/lib/rpg/screen";
 
 /** World units per grid cell. */
-export const CELL = 64;
+export const CELL = 32;
 /** Wall height in world units. */
 const WALL_H = 104;
 /** How high the keep's roof stands above the moor. */
@@ -97,49 +97,49 @@ const TORCH_FRAMES = [WALL_TORCH, TORCH_FLAME_ALT];
 export const KEEP_INTERIOR: Interior = {
   id: "keep",
   plan: [
-    "#############",
-    "####.....####",
-    "####.....####",
-    "#####...#####",
-    "#...........#",
-    "#...........#",
-    "#...........#",
-    "#####...#####",
-    "#####...#####",
-    "######X######",
+    "#########",
+    "###...###",
+    "###...###",
+    "###...###",
+    "#.......#",
+    "#.......#",
+    "#.......#",
+    "###...###",
+    "###...###",
+    "####X####",
   ],
   props: [
     // The sanctum, and what the whole crossing was for.
-    at(6, 1.3, LEY_FONT, 34, { solid: 17 }),
+    at(4, 1.3, LEY_FONT, 34, { solid: 12 }),
     // Great hall: braziers at the corners, banners on the far wall.
     at(1.2, 4.6, BRAZIER, 30, { solid: 12, light: 92 }),
-    at(10.8, 4.6, BRAZIER, 30, { solid: 12, light: 92 }),
-    at(3.6, 4.15, BANNER, 34, { elevate: 34 }),
-    at(8.4, 4.15, BANNER, 34, { elevate: 34 }),
+    at(6.8, 4.6, BRAZIER, 30, { solid: 12, light: 92 }),
+    at(2.4, 4.15, BANNER, 34, { elevate: 34 }),
+    at(5.6, 4.15, BANNER, 34, { elevate: 34 }),
     // Sconces lighting the way in.
-    at(4.6, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
-    at(7.4, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
-    at(5.15, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
-    at(7.85, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
+    at(2.8, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
+    at(5.2, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
+    at(3.15, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
+    at(4.85, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
   ],
   actors: [
     {
       // The archway that used to be scenery: now the way up the tower.
-      ...at(6, 3.35, STAIR_DOOR, 76),
+      ...at(4, 3.35, EXIT_ARCH, 76),
       id: "keep-stair",
       reach: 48,
       label: "CLIMB THE TOWER STAIR",
       interaction: { kind: "enter", site: "tower" },
     },
     {
-      ...at(6, 8.7, EXIT_ARCH, 82),
+      ...at(4, 8.7, EXIT_ARCH, 82),
       id: "keep-exit",
       reach: 60,
       label: "LEAVE THE KEEP",
       interaction: { kind: "exit" },
     },
     {
-      ...at(3.1, 5.5, NPC_SHADE, 30),
+      ...at(2.1, 5.5, NPC_SHADE, 30),
       id: "keep-shade",
       reach: 42,
       label: "SPEAK TO THE SHADE",
@@ -154,7 +154,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(9.1, 5.9, ITEM_TORC, 13, { glow: true, frames: TORC_FRAMES, fps: 4 }),
+      ...at(6.1, 5.9, ITEM_TORC, 13, { glow: true, frames: TORC_FRAMES, fps: 4 }),
       id: "keep-torc",
       reach: 56,
       label: "TAKE THE TORC",
@@ -165,7 +165,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(4.6, 1.6, NPC_SEER, 26),
+      ...at(3.35, 1.6, NPC_SEER, 26),
       id: "keep-seer",
       reach: 40,
       label: "SPEAK TO THE SEER",
@@ -180,7 +180,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(10.2, 4.7, ITEM_KEY, 15, { glow: true }),
+      ...at(6.5, 4.7, ITEM_KEY, 15, { glow: true }),
       id: "keep-key",
       reach: 56,
       label: "TAKE THE IRON KEY",
@@ -191,7 +191,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
   ],
-  leyCellX: 6,
+  leyCellX: 4,
 };
 
 /**
@@ -224,7 +224,7 @@ export const TOWER_INTERIOR: Interior = {
       interaction: { kind: "roof" },
     },
     {
-      ...at(2, 7, STAIR_DOOR, 60),
+      ...at(2, 7, EXIT_ARCH, 60),
       id: "tower-down",
       reach: 44,
       label: "GO BACK DOWN",
@@ -250,6 +250,26 @@ function solid(interior: Interior, cx: number, cy: number): boolean {
   return cellAt(interior, cx, cy) === "#";
 }
 
+/** Distance from a point to the first interior wall along `yaw`. */
+export function interiorRayRange(
+  interior: Interior,
+  x: number,
+  y: number,
+  yaw: number,
+  maximum: number,
+): number {
+  const fx = Math.sin(yaw);
+  const fy = Math.cos(yaw);
+  for (let distance = 6; distance <= maximum; distance += 3) {
+    const wx = x + fx * distance;
+    const wy = y + fy * distance;
+    if (solid(interior, Math.floor(wx / CELL), Math.floor(wy / CELL))) {
+      return Math.max(8, distance - 3);
+    }
+  }
+  return maximum;
+}
+
 /** Centre of a cell in world units. */
 export function cellCentre(cx: number, cy: number): { x: number; y: number } {
   return { x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL };
@@ -262,7 +282,7 @@ export function entryOf(interior: Interior): CameraState {
   const { x, y } = cellCentre(exitCol, exitRow);
   // Face up the plan (toward row 0), and stand far enough in that the eye —
   // which trails CAM_BACK behind — is already inside the doorway.
-  return { x, y: y - CAM_BACK * 0.5, yaw: Math.PI };
+  return { x, y: y - Math.min(CAM_BACK * 0.75, CELL * 0.75), yaw: Math.PI };
 }
 
 /** True when the player has stepped back onto the exit cell. */
@@ -278,7 +298,7 @@ export function resolveInteriorMove(
   toX: number,
   toY: number,
 ): { x: number; y: number } {
-  const R = 14;
+  const R = 8;
   const blocked = (x: number, y: number) => {
     for (const [ox, oy] of [
       [-R, -R],
@@ -543,6 +563,96 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
   return depth;
 }
 
+interface ProjectedPoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+function projectPoint(
+  cam: CameraState,
+  wx: number,
+  wy: number,
+  height: number,
+): ProjectedPoint | null {
+  const { fx, fy } = forward(cam.yaw);
+  const { ex, ey } = eyeOf(cam);
+  const dx = wx - ex;
+  const dy = wy - ey;
+  const z = dx * fx + dy * fy;
+  if (z < 5) return null;
+  return {
+    x: 128 + ((dx * fy - dy * fx) * FOCAL) / z,
+    y: heightRow(height, z, eyeHeight(cam)),
+    z,
+  };
+}
+
+function drawDepthLine(
+  s: Screen,
+  depth: Float32Array,
+  from: ProjectedPoint | null,
+  to: ProjectedPoint | null,
+  colour: number,
+): void {
+  if (!from || !to) return;
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y))));
+  for (let i = 0; i <= steps; i++) {
+    const p = i / steps;
+    const x = Math.round(from.x + (to.x - from.x) * p);
+    const y = Math.round(from.y + (to.y - from.y) * p);
+    const z = from.z + (to.z - from.z) * p;
+    if (x < 0 || x >= SCREEN_W || y < 0 || y >= HUD_TOP) continue;
+    if (depth[x] + 1 >= z) s.px(x, y, colour);
+  }
+}
+
+/** Stone treads fixed to the keep plan, so they turn with the chamber. */
+function drawKeepStairs(
+  s: Screen,
+  interior: Interior,
+  cam: CameraState,
+  depth: Float32Array,
+): void {
+  if (interior.id !== "keep") return;
+  const centreX = 4.5 * CELL;
+  const nearY = 4.28 * CELL;
+  const farY = 1.82 * CELL;
+  const halfWidth = 23;
+  const count = 10;
+  let previousLeft: ProjectedPoint | null = null;
+  let previousRight: ProjectedPoint | null = null;
+  for (let i = 0; i <= count; i++) {
+    const p = i / count;
+    const y = nearY + (farY - nearY) * p;
+    const h = p * 68;
+    const left = projectPoint(cam, centreX - halfWidth, y, h);
+    const right = projectPoint(cam, centreX + halfWidth, y, h);
+    drawDepthLine(s, depth, left, right, i % 2 === 0 ? BW : W);
+    if (i > 0) {
+      drawDepthLine(s, depth, previousLeft, left, W);
+      drawDepthLine(s, depth, previousRight, right, W);
+    }
+    previousLeft = left;
+    previousRight = right;
+  }
+  const railHeight = 13;
+  drawDepthLine(
+    s,
+    depth,
+    projectPoint(cam, centreX - halfWidth, nearY, railHeight),
+    projectPoint(cam, centreX - halfWidth, farY, 68 + railHeight),
+    BC,
+  );
+  drawDepthLine(
+    s,
+    depth,
+    projectPoint(cam, centreX + halfWidth, nearY, railHeight),
+    projectPoint(cam, centreX + halfWidth, farY, 68 + railHeight),
+    BC,
+  );
+}
+
 // ------------------------------------------------------------------- frame
 
 export function renderInterior(
@@ -563,5 +673,9 @@ export function renderInterior(
   drawFloor(s, interior, cam);
   const depth = drawWalls(s, interior, cam);
   s.attributePass(0, HUD_TOP);
-  drawBillboards(s, cam, [...interior.props, ...visibleActors, ...entities], t, depth);
+  drawKeepStairs(s, interior, cam, depth);
+  const actors = visibleActors.filter(
+    (actor) => (actor as Billboard & { id?: string }).id !== "keep-stair",
+  );
+  drawBillboards(s, cam, [...interior.props, ...actors, ...entities], t, depth);
 }

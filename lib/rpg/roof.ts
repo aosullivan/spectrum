@@ -6,31 +6,34 @@ import type { Actor } from "@/lib/rpg/interact";
 import { ROOF_HEIGHT } from "@/lib/rpg/interior";
 import type { Billboard, CameraState } from "@/lib/rpg/projection";
 import { BEACON, PARAPET, ROOF_HATCH } from "@/lib/rpg/tower";
-import { KEEP_POS } from "@/lib/rpg/world";
+import { KEEP_POS, KEEP_SIZE } from "@/lib/rpg/world";
 
-/** Half-extent of the walkable roof, inside the battlements. */
-const HALF = 74;
+/** Walkable leads inside the exterior wall footprint. */
+const HALF_X = KEEP_SIZE.width / 2 - 20;
+const HALF_Y = KEEP_SIZE.depth / 2 - 20;
 
 /** The stone leads themselves, for the renderer to floor you on. */
 export const ROOF_PLATFORM = {
   x: KEEP_POS.x,
   y: KEEP_POS.y,
-  half: HALF + 18,
+  halfX: HALF_X + 10,
+  halfY: HALF_Y + 10,
   height: ROOF_HEIGHT,
 };
 /** Where the battlements sit, just outside the walkable area. */
-const WALL = HALF + 10;
+const WALL_X = HALF_X + 10;
+const WALL_Y = HALF_Y + 10;
 
 /** Where you stand when you climb out of the hatch, facing out over the moor. */
 export function roofEntry(): CameraState {
-  return { x: KEEP_POS.x, y: KEEP_POS.y - 30, yaw: 0, elev: ROOF_HEIGHT };
+  return { x: KEEP_POS.x, y: KEEP_POS.y - 106, yaw: 0, elev: ROOF_HEIGHT };
 }
 
 /** The hatch you climb out of — and back down through. */
 export const ROOF_ACTORS: readonly Actor[] = [
   {
     x: KEEP_POS.x,
-    y: KEEP_POS.y - 52,
+    y: KEEP_POS.y - 124,
     sprite: ROOF_HATCH,
     height: 12,
     stands: ROOF_HEIGHT,
@@ -54,32 +57,32 @@ export const ROOF_PROPS: readonly Billboard[] = (() => {
   // A billboard is as wide as its height times the sprite's aspect; space
   // the sections a shade tighter than that or the wall comes out in chunks.
   const step = Math.floor((height * PARAPET.w) / PARAPET.h) - 2;
-  for (let d = -WALL; d <= WALL; d += step) {
-    // North and south runs.
+  for (let d = -WALL_X; d <= WALL_X; d += step) {
     out.push({
       x: KEEP_POS.x + d,
-      y: KEEP_POS.y + WALL,
+      y: KEEP_POS.y + WALL_Y,
       sprite: PARAPET,
       height,
       stands: ROOF_HEIGHT,
     });
     out.push({
       x: KEEP_POS.x + d,
-      y: KEEP_POS.y - WALL,
+      y: KEEP_POS.y - WALL_Y,
       sprite: PARAPET,
       height,
       stands: ROOF_HEIGHT,
     });
-    // East and west runs.
+  }
+  for (let d = -WALL_Y; d <= WALL_Y; d += step) {
     out.push({
-      x: KEEP_POS.x + WALL,
+      x: KEEP_POS.x + WALL_X,
       y: KEEP_POS.y + d,
       sprite: PARAPET,
       height,
       stands: ROOF_HEIGHT,
     });
     out.push({
-      x: KEEP_POS.x - WALL,
+      x: KEEP_POS.x - WALL_X,
       y: KEEP_POS.y + d,
       sprite: PARAPET,
       height,
@@ -103,9 +106,12 @@ export function resolveRoofMove(
   toY: number,
 ): { x: number; y: number } {
   const clamp = (v: number, centre: number) =>
-    Math.max(centre - HALF, Math.min(centre + HALF, v));
+    Math.max(centre - HALF_X, Math.min(centre + HALF_X, v));
   let x = clamp(toX, KEEP_POS.x);
-  const y = clamp(toY, KEEP_POS.y);
+  const y = Math.max(
+    KEEP_POS.y - HALF_Y,
+    Math.min(KEEP_POS.y + HALF_Y, toY),
+  );
   // The beacon stands in the way too.
   const bx = KEEP_POS.x - 48;
   const by = KEEP_POS.y + 40;
