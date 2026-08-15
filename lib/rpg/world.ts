@@ -22,6 +22,13 @@ import {
   TREE_PINE_LIVE,
   TRILITHON,
 } from "@/lib/rpg/flora";
+import { fbm, rampColour, type Ramp } from "@/lib/rpg/dither";
+import {
+  HERMITAGE_BOXES,
+  HERMITAGE_POS,
+  HERMITAGE_PROPS,
+  HERMITAGE_R,
+} from "@/lib/rpg/hermitage";
 import { LOOK } from "@/lib/rpg/look";
 import { B, BB, BC, BG, C, E, G, K, RAMP_G0, W } from "@/lib/rpg/palette";
 import { hash, type Sprite } from "@/lib/rpg/screen";
@@ -33,8 +40,24 @@ import {
 } from "@/lib/rpg/village";
 
 export { VILLAGE_POS } from "@/lib/rpg/village";
+export { HERMITAGE_BOXES, HERMITAGE_POS } from "@/lib/rpg/hermitage";
 
 // ------------------------------------------------------------------- places
+
+/**
+ * Places are laid out as a journey, not a cluster. The leyline is the spine:
+ * it runs due north from spawn to the keep, and the named places alternate
+ * east and west of it in bands, one destination per band. Nothing shares a
+ * band with anything else, so from any of them the next is a walk across
+ * open ground rather than a step sideways — and the ancient wood west of the
+ * line gets two of its own, or it is half the map with nothing in it.
+ *
+ *      y 1400   THE KEEP ......................... on the line
+ *      y 1100   .............. THE VILLAGE ....... east
+ *      y  900   THE HERMITAGE ..... THE HENGE .... west / far east
+ *      y  500   STONE CIRCLE ...... THE GROVE .... west / east
+ *      y   40   spawn ............................ on the line
+ */
 
 /** The keep the player can see from spawn and walk to. */
 export const KEEP_POS = { x: 0, y: 1400 };
@@ -43,9 +66,11 @@ export const KEEP_SIZE = { width: 288, depth: 320 } as const;
 /** The visible south threshold where the leyline enters the keep. */
 export const KEEP_GATE_Y = KEEP_POS.y - KEEP_SIZE.depth / 2;
 /** A stone circle off the leyline — landmark and future save shrine. */
-export const CIRCLE_POS = { x: 300, y: 520 };
+export const CIRCLE_POS = { x: -340, y: 520 };
+/** Trees stand off the stones, or the circle is invisible inside the wood. */
+const CIRCLE_R = 150;
 /** The sacred grove: still water, living ground, and the lady who rises. */
-export const GROVE_POS = { x: 470, y: 430 };
+export const GROVE_POS = { x: 500, y: 560 };
 const POOL_R = 62;
 export const GROVE_R = 190;
 /**
@@ -56,46 +81,91 @@ export const GROVE_R = 190;
  */
 export const DEAD_WOOD_X = -260;
 const WOODS_EDGE_X = DEAD_WOOD_X;
-export const GREENWOOD_EDGE_X = 260;
+export const GREENWOOD_X = 260;
+export const GREENWOOD_EDGE_X = GREENWOOD_X;
 /** The henge stands deep in the greenwood. */
-export const HENGE_POS = { x: 760, y: 760 };
+export const HENGE_POS = { x: 840, y: 980 };
+const HENGE_R = 210;
 
 // ------------------------------------------------------------------ terrain
 
 /**
- * What bare ground is made of, per look: void black (classic), the flat
- * earth tone (dusk), or — under the ULAplus ramps — a mottled value ramp,
- * heather-dark to moss-lit, with a lit verge where the leyline's light
- * spills onto the soil beside it.
+ * Biome ground ramps, dark to light. The field and the dither above them
+ * never change; the look only changes what darkness is made of. Classic
+ * starts at black — the moor lit by nothing but the leyline, shadow as the
+ * ground's resting state. The earth look floors it at the region's earth
+ * tone instead. The ULAplus look walks the palette's soil rows (16..19)
+ * up into grass, so far ground fades to dark soil rather than to void.
+ * Steps are neighbours in tone, so a cell shaded between two of them holds
+ * exactly two colours and survives the attribute pass unaltered.
  */
-export function bareGround(wx: number, wy: number): number {
-  if (!LOOK.ramps) return LOOK.earth ? E : K;
-  const ix = Math.floor(wx);
-  const iy = Math.floor(wy);
-  // Broad moisture clumps set the value; sparse lit blades sit proud.
-  const m = hash(ix >> 2, iy >> 2);
-  let step = m < 240 ? 2 : m < 700 ? 1 : 0;
-  if (hash(ix, iy ^ 0xabc) < 28) step = 3;
-  const ax = Math.abs(wx);
-  if (wy < KEEP_POS.y && ax < 30) step += ax < 14 ? 2 : 1;
-  return RAMP_G0 + Math.min(3, step);
+const GROUND_RAMP: Ramp = [K, K, G, BG];
+const GROUND_RAMP_EARTH: Ramp = [E, E, G, BG];
+const GROUND_RAMP_ULAPLUS: Ramp = [
+  RAMP_G0,
+  RAMP_G0 + 1,
+  RAMP_G0 + 2,
+  G,
+  BG,
+];
+
+/** The ground ramp the current look shades through. */
+export function groundRamp(): Ramp {
+  if (LOOK.ramps) return GROUND_RAMP_ULAPLUS;
+  return LOOK.earth ? GROUND_RAMP_EARTH : GROUND_RAMP;
 }
 
 /**
- * Ground colour at a world point; bare ground is the region's earth tone
- * (or void black in the classic look — see look.ts). Green line-work and
- * tufts over it; the cyan leyline runs north along x=0 from spawn to the
- * keep gate.
+ * Smooth 0..1 crossing between two world coordinates. The bands used to
+ * differ by which ramp they picked, which put a hard seam down the map where
+ * one gave way to the next — invisible when the ground was sparse marks,
+ * glaring once it is shaded. Every biome now sits on the one ramp and differs
+ * only in how far up it it sits, blended across a wide margin.
+ */
+function band(v: number, a: number, b: number): number {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * How far up its ramp the ground mat sits, and so how much of the near moor
+ * is lit at all. This is the dial between the two things the look wants at
+ * once: the design's black-dominant moor, and the density that makes dither
+ * shading read as ground rather than as scattered marks.
+ *
+ * The noise field averages 0.5, so this lands almost exactly on the fraction
+ * of near ground that takes green. It is touchy — the ramp step is a hard
+ * boundary, so 0.8 thins back out into the old line-work and 1.2 closes the
+ * mat over and hands the frame to green. Distance scales it down on top.
+ */
+const MAT_DENSITY = 1.05;
+
+/**
+ * Ground colour at a world point, or K for bare dark earth.
+ * The look: the ground is *shaded* rather than stippled — a smooth lushness
+ * field resolved into two neighbouring ramp colours by an ordered dither,
+ * darkness itself set by the look's ramp (see groundRamp). The cyan leyline
+ * runs north along x=0 to the keep gate.
  *
  * `footprint` is how many world units one screen pixel spans at this depth —
  * distant samples widen thin features (the leyline must reach the horizon)
  * and thin out point features (or they alias into noise).
+ *
+ * `sx`/`sy` are the *screen* pixel being painted. The dither threshold has to
+ * be screen-anchored, like the attribute grid: fixed to the glass while the
+ * world turns beneath it. Anchored in world space it swims and aliases as the
+ * camera rotates. `far` is the distance falloff, 1 near and 0 at the horizon;
+ * it scales the whole field, so detail thins into the dark on its own instead
+ * of needing cutoffs.
  */
 export function groundColour(
   wx: number,
   wy: number,
   footprint = 1,
   t = 0,
+  sx = 0,
+  sy = 0,
+  far = 1,
 ): number {
   const ix = Math.floor(wx);
   const iy = Math.floor(wy);
@@ -112,14 +182,9 @@ export function groundColour(
     if ((ix + iy) % 2 === 0) return B;
     return hash(ix, iy + 4242) < 60 ? BB : K;
   }
-  // --- and the living ground that rings it ---
-  if (gd < GROVE_R) {
-    const lush = hash(ix, iy + 8080);
-    if (lush < 150) return (ix + iy) % 2 === 0 ? G : BG;
-    if (lush < 175) return BG;
-  }
-
-  // --- village lane and yard: dense monochrome stipple like Wanderers ---
+  // --- village lane and yard: a swept yard, not moorland ---
+  // Bare earth with a cobble stipple, and no mat over it — the village reads
+  // as trodden ground precisely because the shading stops at its edge.
   const vx = wx - VILLAGE_POS.x;
   const vy = wy - VILLAGE_POS.y;
   const villageSquare = Math.abs(vx) < 82 && Math.abs(vy) < 138;
@@ -128,21 +193,66 @@ export function groundColour(
     const cobble = hash(ix >> 1, iy >> 1);
     if (cobble < 95 && (ix + iy) % 3 === 0) return W;
     if ((iy & 15) === 0 && (ix & 7) < 3) return W;
+    return K;
+  }
+
+  // --- the hermit's plot: the one bed of living green in the dead wood, and
+  // the reason there is anything on his drying rack ---
+  const hx = wx - (HERMITAGE_POS.x + 30);
+  const hy = wy - (HERMITAGE_POS.y - 76);
+  if (Math.abs(hx) < 46 && Math.abs(hy) < 30) {
+    // Sown in rows, so it reads as tended rather than as a patch of weed.
+    if (Math.abs(hy) > 26 || Math.abs(hx) > 42) return K;
+    if (iy % 7 < 3 && hash(ix, iy + 3131) < 620) {
+      return hash(ix, iy + 4242) < 90 ? BG : G;
+    }
   }
 
   // --- the leyline: bright core, dithered fringe, shining to the horizon ---
-  // The fringe's dark half is bare ground, not paint, so it follows the
-  // look — left black it reads as a burnt strip beside the light.
-  const bare = bareGround(wx, wy);
+  // The dark halves of the core's breaks and the fringe dither never return
+  // black outright: they fall through to the mat, so the gaps in the light
+  // show the turf beneath it — on the looks whose ground is soil rather than
+  // void, a hard K here read as a burnt strip beside the light.
   const ax = Math.abs(wx);
   if (wy < KEEP_POS.y) {
     const core = Math.max(1.6, footprint * 0.7);
-    if (ax < core) return footprint > 3 || (iy & 7) < 3 ? BC : C;
-    if (ax < core + 3.4) return (ix + iy) % 2 === 0 ? C : bare;
-    if (ax < core + 6.4) return hash(ix, iy) < 140 ? C : bare;
+    // Broken along its length near to hand. Walk along the vein rather than
+    // across it and a solid core lies over the whole near floor as one flat
+    // cyan slab; dashed, it reads as light coming up through the turf.
+    if (ax < core) {
+      if (footprint > 3) return BC;
+      // Broken irregularly, not on a modulo: a strict repeat up the middle
+      // of the screen reads as a chain or a ladder rather than as light.
+      if (hash(ix, iy) <= 660) return (iy & 3) === 0 ? BC : C;
+    } else if (ax < core + 3.4) {
+      if ((ix + iy) % 2 === 0) return C;
+    } else if (ax < core + 6.4) {
+      if (hash(ix, iy) < 140) return C;
+    } else if (
+      // And a wide, thinning spill either side: the ley is the one light
+      // source on the moor, so the ground near it should know about it.
+      // Sparse enough that it never competes with the core it is cast from.
+      ax < core + 30 &&
+      hash(ix, iy + 77) < 120 * (1 - (ax - core - 6.4) / 24)
+    ) {
+      return C;
+    }
   }
 
-  // --- moss patches: elliptical dithered blobs on a coarse lattice ---
+  // --- the mat: two octaves of noise dithered into a ramp ---
+  let level = (fbm(hash, wx, wy, 90) * 0.62 + fbm(hash, wx, wy, 26) * 0.38) * MAT_DENSITY;
+
+  // --- biome: dying woodland west, living greenwood east, moor between ---
+  const dead = 1 - band(wx, DEAD_WOOD_X - 130, DEAD_WOOD_X + 130);
+  const greenwood = band(wx, GREENWOOD_EDGE_X - 130, GREENWOOD_EDGE_X + 130);
+  // The greenwood lift stays small on purpose: much past this the field never
+  // dips back below the ramp's black step and the wood goes solid green.
+  level += greenwood * 0.12 - dead * 0.5;
+
+  // --- the living ground ringing the sacred pool lifts the whole field ---
+  if (gd < GROVE_R) level += 0.34 * (1 - gd / GROVE_R);
+
+  // --- moss patches: elliptical blooms on a coarse lattice ---
   const mx = Math.floor(wx / 56);
   const my = Math.floor(wy / 56);
   const mh = hash(mx, my ^ 0x55);
@@ -151,55 +261,39 @@ export function groundColour(
     const cy = my * 56 + 12 + ((mh >> 3) % 32);
     const dx = wx - cx;
     const dy = (wy - cy) * 2.6;
-    if (dx * dx + dy * dy < 230) {
-      if ((ix + iy) % 2 === 0 && hash(ix, iy + 9000) < 820) return G;
-      if (hash(ix, iy + 9100) < 8) return BG;
-    }
+    if (dx * dx + dy * dy < 230) level += 0.16;
   }
 
-  const woods = wx < WOODS_EDGE_X;
-  const greenwood = wx > GREENWOOD_EDGE_X;
-
-  // --- undergrowth: a dithered mat of living ground, laid down first ---
-  // The moor and greenwood should read as carpeted, not as bare earth with
-  // a few dashes on it. The old forest is exempt: it is dying.
-  if (!woods) {
-    const bed = hash(ix >> 1, iy >> 1);
-    const cover = (greenwood ? 150 : 90) * LOOK.cover;
-    if (bed < cover && (ix + iy) % 2 === 0) {
-      return bed < cover / 7 ? BG : G;
-    }
-  }
-
-  // --- and clumps of taller growth standing proud of the mat ---
-  const cell = woods ? 7 : greenwood ? 5 : 8;
-  const tx = Math.floor(wx / cell);
-  const ty = Math.floor(wy / cell);
-  const th = hash(tx, ty);
-  // The old forest is dying: barely any ground cover left under it.
-  const lively = woods ? 70 : greenwood ? 220 : 190;
-  const density = footprint > 9 ? 25 : footprint > 3 ? 90 : lively;
-  if (th < (footprint <= 3 ? lively : density)) {
-    const px = tx * cell + (th % cell);
-    const py = ty * cell + ((th >> 4) % cell);
-    const dx = ix - px;
-    const dy = iy - py;
-    const bright = th < (greenwood ? 90 : 50);
-    if (dy === 0 && dx >= -2 && dx <= 2) return bright ? BG : G;
-    if (dy === -1 && dx >= -1 && dx <= 1) return G;
-    if (dy === -2 && dx === 0) return bright ? BG : G;
+  // --- tufts standing proud, and bare scrapes worn through ---
+  // Per-pixel detail only survives close up; further out it aliases into
+  // noise, and the falloff is already thinning the field for us.
+  //
+  // This is the one part of the shading that is not attribute-cheap. The
+  // smooth field crosses at most one ramp step inside an 8x8 cell, so it
+  // leaves the clash pass almost nothing to do (measured: 18 of 608 cells
+  // over two colours). These per-pixel jumps are large enough to skip a step,
+  // which takes it to 179 of 608. It stays because the pass absorbs it
+  // invisibly — strays merge to the nearest ramp neighbour, which is a tonal
+  // nudge rather than a break — and because without it the ground shades too
+  // smoothly to read as 8-bit. Widen the jumps and that stops being true.
+  if (footprint < 3) {
+    const tuft = hash(ix, iy);
+    if (tuft < 70 + greenwood * 25) level += 0.22;
+    else if (tuft > 972) level -= 0.4;
   }
 
   // --- loose stones scattered through it ---
-  if (!woods && hash(ix >> 2, iy >> 2) < 5 && (ix & 3) < 2 && (iy & 3) < 2) {
+  if (
+    dead < 0.5 &&
+    footprint < 2.5 &&
+    hash(ix >> 2, iy >> 2) < 5 &&
+    (ix & 3) < 2 &&
+    (iy & 3) < 2
+  ) {
     return W;
   }
 
-  // --- faint world-anchored contour dashes tie the ground together ---
-  if ((iy & 31) === 0 && (ix & 7) < 3 && hash(ix >> 3, iy) < 500) return G;
-
-  // Bare ground: void black, or the region's earth tone when the look asks.
-  return bare;
+  return rampColour(groundRamp(), level * far, sx, sy);
 }
 
 // ------------------------------------------------------------------ features
@@ -210,6 +304,8 @@ export interface Feature {
   x: number;
   y: number;
   sprite: Sprite;
+  /** Body radius in world units. Omitted features can be walked through. */
+  solid?: number;
   /** World height in units; width follows the sprite's aspect. */
   height: number;
   /** Landmarks stay visible (min on-screen scale) at any distance. */
@@ -315,6 +411,7 @@ function crenellateY(
 /** The fixed, hand-placed world: the stone circle and the henge. */
 const PLACED: Feature[] = [
   ...VILLAGE_PROPS,
+  ...HERMITAGE_PROPS,
   // Opening tableau: pale sarsens establish the near, middle, and far planes
   // visible in the reference frame while remaining ordinary world objects.
   { x: 126, y: 220, sprite: SARSEN_FALLEN, height: 22 },
@@ -380,7 +477,10 @@ const PLACED: Feature[] = [
   },
 
   // The henge: five trilithons in a ring, each far taller than the mage,
-  // with outliers fallen around them.
+  // with outliers fallen around them. These are the one place in the world
+  // you can put your face against a rock, so they are solid: walking through
+  // a megalith is bad enough on its own, and it also puts the eye inside a
+  // sprite, where even a capped billboard is a wall of grey.
   ...[0, 1, 2, 3, 4].map((i) => {
     const a = (i / 5) * Math.PI * 2 + 0.3;
     return {
@@ -389,6 +489,7 @@ const PLACED: Feature[] = [
       sprite: TRILITHON,
       height: 112,
       landmark: true,
+      solid: 30,
     };
   }),
   ...[0, 1, 2, 3, 4, 5].map((i) => {
@@ -398,6 +499,7 @@ const PLACED: Feature[] = [
       y: HENGE_POS.y + Math.cos(a) * 250,
       sprite: i % 3 === 0 ? SARSEN_FALLEN : SARSEN_TALL,
       height: i % 3 === 0 ? 26 : 84,
+      solid: i % 3 === 0 ? 26 : 14,
     };
   }),
 
@@ -486,13 +588,20 @@ function chunkFeatures(cx: number, cy: number): Feature[] {
     });
   }
 
-  // Keep the leyline clear of clutter, and keep the sacred clearing and the
-  // henge ring genuinely open — scattered woodland inside them would stand
-  // between the player and the thing they came to see.
+  // Keep the leyline clear of clutter, and keep every named place genuinely
+  // open — scattered woodland inside them would stand between the player and
+  // the thing they came to see. The two western places need this most: the
+  // dead wood is dense enough to swallow a stone circle whole.
   const clear = out.filter((f) => {
     if (Math.abs(f.x) < 14 && f.y < KEEP_POS.y) return false;
     if (Math.hypot(f.x - GROVE_POS.x, f.y - GROVE_POS.y) < GROVE_R) return false;
-    if (Math.hypot(f.x - HENGE_POS.x, f.y - HENGE_POS.y) < 210) return false;
+    if (Math.hypot(f.x - HENGE_POS.x, f.y - HENGE_POS.y) < HENGE_R) return false;
+    if (Math.hypot(f.x - CIRCLE_POS.x, f.y - CIRCLE_POS.y) < CIRCLE_R) return false;
+    if (
+      Math.hypot(f.x - HERMITAGE_POS.x, f.y - HERMITAGE_POS.y) < HERMITAGE_R
+    ) {
+      return false;
+    }
     return true;
   });
   chunkCache.set(key, clear);
@@ -514,7 +623,11 @@ export const GATE = {
  * Solid footprints the hero cannot glide through. The keep is a wall, not a
  * poster: you pull up at its facade, with only the scripted door passable.
  */
-const WORLD_COLLIDERS = [...KEEP_BOXES, ...VILLAGE_BOXES].filter(
+const WORLD_COLLIDERS = [
+  ...KEEP_BOXES,
+  ...VILLAGE_BOXES,
+  ...HERMITAGE_BOXES,
+].filter(
   (box) =>
     box.base === 0 && box.detail !== "door" && box.detail !== "timberDoor",
 );
@@ -530,12 +643,21 @@ export function resolveMove(
   toX: number,
   toY: number,
 ): { x: number; y: number } {
+  // Only the handful of authored megaliths are solid; the scattered woodland
+  // stays walk-through, or the greenwood becomes a maze of invisible posts.
+  const stones = PLACED.filter((f) => f.solid !== undefined);
   const blocked = (x: number, y: number) =>
     WORLD_COLLIDERS.some(
       (box) =>
         Math.abs(x - box.x) < box.w / 2 + OUTDOOR_BODY_R &&
         Math.abs(y - box.y) < box.d / 2 + OUTDOOR_BODY_R,
-    );
+    ) ||
+    stones.some((f) => {
+      const dx = x - f.x;
+      const dy = y - f.y;
+      const reach = (f.solid ?? 0) + OUTDOOR_BODY_R;
+      return dx * dx + dy * dy < reach * reach;
+    });
   if (!blocked(toX, toY)) return { x: toX, y: toY };
   if (!blocked(toX, fromY)) return { x: toX, y: fromY };
   if (!blocked(fromX, toY)) return { x: fromX, y: toY };

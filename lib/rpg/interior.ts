@@ -48,7 +48,14 @@ export interface Interior {
   readonly id: string;
   /** People, items and the way out. */
   readonly actors: readonly Actor[];
-  /** Row strings: '#' solid, '.' floor, 'X' the way back outdoors. */
+  /**
+   * Row strings: '#' solid, '.' floor, 'X' the way back outdoors. Rows run
+   * SOUTH to NORTH, matching the world outside — row 0 is the southern edge,
+   * and +y is north indoors exactly as it is on the moor. The keep is entered
+   * through its south gate, so row 0 is where the 'X' goes and she walks up
+   * the plan on the same bearing she crossed the threshold on. Get this
+   * backwards and the compass swings half a turn in the doorway.
+   */
   readonly plan: readonly string[];
   /** Props standing in the room, in world units. */
   readonly props: readonly Billboard[];
@@ -91,55 +98,56 @@ function at(
 const TORCH_FRAMES = [WALL_TORCH, TORCH_FLAME_ALT];
 
 /**
- * The keep: a south entrance corridor, a great hall, and a sanctum at the
- * back holding the ley-font. Row 0 is the far (north) end.
+ * The keep: the south entrance corridor at row 0, a great hall, and the
+ * sanctum at the north end holding the ley-font — the same way round as the
+ * masonry outside, so walking in through the gate keeps your bearing.
  */
 export const KEEP_INTERIOR: Interior = {
   id: "keep",
   plan: [
-    "#########",
-    "###...###",
-    "###...###",
-    "###...###",
-    "#.......#",
-    "#.......#",
-    "#.......#",
-    "###...###",
-    "###...###",
     "####X####",
+    "###...###",
+    "###...###",
+    "#.......#",
+    "#.......#",
+    "#.......#",
+    "###...###",
+    "###...###",
+    "###...###",
+    "#########",
   ],
   props: [
     // The sanctum, and what the whole crossing was for.
-    at(4, 1.3, LEY_FONT, 34, { solid: 12 }),
+    at(4, 7.7, LEY_FONT, 34, { solid: 12 }),
     // Great hall: braziers at the corners, banners on the far wall.
-    at(1.2, 4.6, BRAZIER, 30, { solid: 12, light: 92 }),
-    at(6.8, 4.6, BRAZIER, 30, { solid: 12, light: 92 }),
-    at(2.4, 4.15, BANNER, 34, { elevate: 34 }),
-    at(5.6, 4.15, BANNER, 34, { elevate: 34 }),
+    at(1.2, 4.4, BRAZIER, 30, { solid: 12, light: 92 }),
+    at(6.8, 4.4, BRAZIER, 30, { solid: 12, light: 92 }),
+    at(2.4, 4.85, BANNER, 34, { elevate: 34 }),
+    at(5.6, 4.85, BANNER, 34, { elevate: 34 }),
     // Sconces lighting the way in.
-    at(2.8, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
-    at(5.2, 5.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
-    at(3.15, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
-    at(4.85, 7.6, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
+    at(2.8, 3.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
+    at(5.2, 3.5, WALL_TORCH, 22, { elevate: 40, frames: TORCH_FRAMES, light: 66 }),
+    at(3.15, 1.4, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
+    at(4.85, 1.4, WALL_TORCH, 22, { elevate: 38, frames: TORCH_FRAMES, light: 66 }),
   ],
   actors: [
     {
       // The archway that used to be scenery: now the way up the tower.
-      ...at(4, 3.35, EXIT_ARCH, 76),
+      ...at(4, 5.65, EXIT_ARCH, 76),
       id: "keep-stair",
       reach: 48,
       label: "CLIMB THE TOWER STAIR",
       interaction: { kind: "enter", site: "tower" },
     },
     {
-      ...at(4, 8.7, EXIT_ARCH, 82),
+      ...at(4, 0.3, EXIT_ARCH, 82),
       id: "keep-exit",
       reach: 60,
       label: "LEAVE THE KEEP",
       interaction: { kind: "exit" },
     },
     {
-      ...at(2.1, 5.5, NPC_SHADE, 30),
+      ...at(2.1, 3.5, NPC_SHADE, 30),
       id: "keep-shade",
       reach: 42,
       label: "SPEAK TO THE SHADE",
@@ -154,7 +162,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(6.1, 5.9, ITEM_TORC, 13, { glow: true, frames: TORC_FRAMES, fps: 4 }),
+      ...at(6.1, 3.1, ITEM_TORC, 13, { glow: true, frames: TORC_FRAMES, fps: 4 }),
       id: "keep-torc",
       reach: 56,
       label: "TAKE THE TORC",
@@ -165,7 +173,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(3.35, 1.6, NPC_SEER, 26),
+      ...at(3.35, 7.4, NPC_SEER, 26),
       id: "keep-seer",
       reach: 40,
       label: "SPEAK TO THE SEER",
@@ -180,7 +188,7 @@ export const KEEP_INTERIOR: Interior = {
       },
     },
     {
-      ...at(6.5, 4.7, ITEM_KEY, 15, { glow: true }),
+      ...at(6.5, 4.3, ITEM_KEY, 15, { glow: true }),
       id: "keep-key",
       reach: 56,
       label: "TAKE THE IRON KEY",
@@ -202,29 +210,29 @@ export const KEEP_INTERIOR: Interior = {
 export const TOWER_INTERIOR: Interior = {
   id: "tower",
   plan: [
-    "#####",
-    "#...#",
-    "#...#",
-    "#...#",
-    "#...#",
-    "#...#",
-    "#...#",
     "##X##",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#####",
   ],
   props: [
-    at(1.4, 5.6, WALL_TORCH, 20, { elevate: 34, frames: TORCH_FRAMES }),
-    at(3.6, 3.4, WALL_TORCH, 20, { elevate: 34, frames: TORCH_FRAMES }),
+    at(1.4, 1.4, WALL_TORCH, 20, { elevate: 34, frames: TORCH_FRAMES }),
+    at(3.6, 3.6, WALL_TORCH, 20, { elevate: 34, frames: TORCH_FRAMES }),
   ],
   actors: [
     {
-      ...at(2, 1.15, ROOF_HATCH, 26),
+      ...at(2, 5.85, ROOF_HATCH, 26),
       id: "tower-roof",
       reach: 48,
       label: "CLIMB OUT ONTO THE ROOF",
       interaction: { kind: "roof" },
     },
     {
-      ...at(2, 7, EXIT_ARCH, 60),
+      ...at(2, 0, EXIT_ARCH, 60),
       id: "tower-down",
       reach: 44,
       label: "GO BACK DOWN",
@@ -233,7 +241,7 @@ export const TOWER_INTERIOR: Interior = {
   ],
   leyCellX: 2,
   // Rise the full height of the wall over the length of the flight.
-  climb: { baseY: 7 * CELL, topY: 1.2 * CELL, rise: ROOF_HEIGHT },
+  climb: { baseY: CELL, topY: 6.8 * CELL, rise: ROOF_HEIGHT },
   // Stonework well above the top of the climb, so there is always shaft
   // overhead however high she has risen.
   wallHeight: ROOF_HEIGHT + WALL_H,
@@ -280,9 +288,10 @@ export function entryOf(interior: Interior): CameraState {
   const exitRow = interior.plan.findIndex((r) => r.includes("X"));
   const exitCol = interior.plan[exitRow].indexOf("X");
   const { x, y } = cellCentre(exitCol, exitRow);
-  // Face up the plan (toward row 0), and stand far enough in that the eye —
-  // which trails CAM_BACK behind — is already inside the doorway.
-  return { x, y: y - Math.min(CAM_BACK * 0.75, CELL * 0.75), yaw: Math.PI };
+  // Face up the plan — north, the bearing she was already travelling on when
+  // she crossed the threshold — and stand far enough in that the eye, which
+  // trails CAM_BACK behind, is already inside the doorway.
+  return { x, y: y + Math.min(CAM_BACK * 0.75, CELL * 0.75), yaw: 0 };
 }
 
 /** True when the player has stepped back onto the exit cell. */
@@ -333,20 +342,24 @@ export function resolveInteriorMove(
  * How brightly the room's fires reach a point on the floor, 0..1. Torch
  * light is the one warm thing in a keep made of white line-work, and it is
  * what stops a chamber reading as a diagram.
+ *
+ * Pools are summed rather than maxed — two fires facing each other across a
+ * hall brighten the middle, which is the whole reason for lighting it from
+ * both sides — and the falloff is cubic. Quadratic left a quarter of full
+ * brightness still standing at half the radius, which is what turned the
+ * flags into one flat sheet of yellow instead of two pools of firelight.
  */
 function litness(interior: Interior, wx: number, wy: number): number {
-  let best = 0;
+  let total = 0;
   for (const p of interior.props) {
     if (!p.light) continue;
     const dx = wx - p.x;
     const dy = wy - p.y;
     const d = Math.sqrt(dx * dx + dy * dy);
     if (d >= p.light) continue;
-    // Quadratic falloff: a torch should make a pool, not floodlight a hall.
-    const v = (1 - d / p.light) ** 2;
-    if (v > best) best = v;
+    total += (1 - d / p.light) ** 3;
   }
-  return best;
+  return Math.min(1, total);
 }
 
 // ------------------------------------------------------------------- floor
@@ -359,7 +372,10 @@ function litness(interior: Interior, wx: number, wy: number): number {
 function floorColour(interior: Interior, wx: number, wy: number): number {
   const veinX = (interior.leyCellX + 0.5) * CELL;
   const d = Math.abs(wx - veinX);
-  if (d < 2) return BC;
+  // The core is broken along its length rather than solid: crossed at a
+  // glancing angle a solid vein turns the whole near floor into one cyan
+  // slab, which reads as a painted stripe instead of light under stone.
+  if (d < 1.6) return Math.floor(wy) % 5 === 0 ? C : BC;
   if (d < 6 && (Math.floor(wx) + Math.floor(wy)) % 2 === 0) return C;
   const jx = ((wx % CELL) + CELL) % CELL;
   const jy = ((wy % CELL) + CELL) % CELL;
@@ -376,6 +392,42 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
 function toned(x: number, y: number, level: number): boolean {
   return BAYER[(y & 3) * 4 + (x & 3)] < level * 16;
+}
+
+/**
+ * The ceiling, as beams crossing the hall.
+ *
+ * It is the same plane as the floor, mirrored above the eye, so a beam and a
+ * flagstone joint at the same depth land on rows equidistant from the
+ * horizon and the room closes. Without it the chamber has no lid: everything
+ * above the wall tops is void, and a room open to a black sky reads as a pen
+ * rather than an interior. Beams only — a full coffered grid up there would
+ * out-draw the floor, and the floor is where the player is looking.
+ */
+function drawCeiling(s: Screen, interior: Interior, cam: CameraState): void {
+  const { fx, fy } = forward(cam.yaw);
+  const { ex, ey } = eyeOf(cam);
+  const above = (interior.wallHeight ?? WALL_H) - eyeHeight(cam);
+  if (above <= 2) return;
+  for (let sy = 1; sy < HORIZON; sy++) {
+    const dist = (above * FOCAL) / (HORIZON - sy);
+    // Far beams converge into a single flickering line; let them go dark and
+    // keep the vanishing point clean.
+    if (dist > 620) continue;
+    const faint = dist > 380;
+    for (let sx = 0; sx < SCREEN_W; sx++) {
+      const lat = ((sx - 128) * dist) / FOCAL;
+      const wx = ex + fx * dist + fy * lat;
+      const wy = ey + fy * dist - fx * lat;
+      // One beam per grid cell, crossing the room's short axis, with a
+      // ridge purlin running the length of it.
+      const beam = ((wy % CELL) + CELL) % CELL < 2.2;
+      const purlin = Math.abs(((wx % CELL) + CELL) % CELL - CELL / 2) < 1.1;
+      if (!beam && !purlin) continue;
+      if (faint && (sx + sy) % 2 !== 0) continue;
+      s.fb[sy * SCREEN_W + sx] = beam ? W : C;
+    }
+  }
 }
 
 function drawFloor(s: Screen, interior: Interior, cam: CameraState): void {
@@ -493,6 +545,24 @@ function castColumns(interior: Interior, cam: CameraState): (Hit | null)[] {
   return out;
 }
 
+/** World units per masonry course: the stone's own scale, and the room's. */
+const COURSE = 19;
+
+/** Blocks lie longer than they are tall, or the face reads as a net. */
+const BLOCK = COURSE * 2;
+
+/**
+ * How far up a wall firelight reaches, and how hard. A brazier stands on the
+ * floor, so the stone above it goes dark quickly — and the walls have to take
+ * far less of the glow than the flags do, or the chamber turns into one flat
+ * yellow field with the room lost inside it.
+ */
+const FIRE_REACH = 46;
+const FIRE_ON_STONE = 0.6;
+
+/** Past this the coursing aliases into speckle, so the far stone goes plain. */
+const MASONRY_RANGE = 340;
+
 /**
  * Walls as flat FACES, not textured columns: group the columns that hit the
  * same wall face, fill it solid BLACK, and draw it in white line-work — the
@@ -501,12 +571,22 @@ function castColumns(interior: Interior, cam: CameraState): (Hit | null)[] {
  * is behind it show through and reads as mesh. Filling with paper rather
  * than ink is what keeps a chamber from turning the screen white.
  *
- * With the body black, every line carries the geometry: the joint where the
- * wall meets floor and ceiling, the vertical seam at each corner, and a
- * course line partway up to give the stone a scale to be read against.
+ * With the body black, every line carries the geometry: the joints where the
+ * wall meets floor and ceiling, the vertical seam at each corner, and then
+ * the masonry itself — courses laid at a fixed height in WORLD units, so they
+ * crowd together with distance the way real coursing does, and the vertical
+ * joints between blocks staggered half a block per course. That coursing is
+ * what the chamber was missing. Two lines a long way apart is a wireframe;
+ * the same wall with its stones drawn on it is a building, and it stands up
+ * next to the stipple the moor is drawn with.
+ *
+ * Firelight lands on the stone too. The raycaster has always recorded where
+ * on the wall each ray struck so that it could, and nothing ever read it: a
+ * hall with braziers in it lit its floor and left its walls in the dark.
  */
 function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Array {
   const hits = castColumns(interior, cam);
+  const eyeY = eyeHeight(cam);
   // Per-column wall distance, handed to the billboard pass so stone can hide
   // what stands behind it. Infinity where the ray escaped the plan.
   const depth = new Float32Array(SCREEN_W).fill(Infinity);
@@ -535,12 +615,12 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
       end++;
     }
 
-    // The palette has exactly two whites, so the line-work's brightness can
-    // encode ONE thing, and distance is the one worth having: the near walls
-    // of a chamber come forward and the far ones sit back, which is the only
-    // depth cue left once every face is the same black.
     const mid = hits[(x + end) >> 1] ?? face;
-    const line = mid.z < 200 ? BW : W;
+    // The two whites are the only value steps there are, and they are spent
+    // on the one distinction worth having: near faces come forward, far ones
+    // sit back. Faces square to the plan's two axes take different ones so
+    // that a corner reads as a corner rather than as a line on a flat hole.
+    const line = mid.z < 200 && face.side === 0 ? BW : W;
 
     for (let cx = x; cx <= end; cx++) {
       const col = hits[cx];
@@ -548,14 +628,50 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
       const y0 = Math.max(0, Math.ceil(col.top));
       const y1 = Math.min(HUD_TOP - 1, Math.floor(col.bot));
       if (y1 < y0) continue;
-      // A course line one third down the face. Without it a tall wall is two
-      // lines a long way apart and the eye has nothing to judge its height
-      // by; with it the stone has a scale.
-      const course = y0 + Math.round((y1 - y0) / 3);
       const seam = cx === x || cx === end;
+      // Where along this face the column lands, and how much of the wall one
+      // column of screen covers — which is how wide a joint has to be to stay
+      // a hairline whether the stone is two paces off or twenty.
+      const along = col.side === 0 ? col.hitY : col.hitX;
+      const grain = col.z / FOCAL;
+      const masonry = col.z < MASONRY_RANGE;
+      const lit = litness(interior, col.hitX, col.hitY);
       for (let y = y0; y <= y1; y++) {
         const i = y * SCREEN_W + cx;
-        s.fb[i] = y === y0 || y === y1 || y === course || seam ? line : K;
+        if (y === y0 || y === y1 || seam) {
+          s.fb[i] = line;
+          continue;
+        }
+        // Height on the wall of this row and the next, so a course is drawn
+        // exactly once however many world units the row happens to span.
+        const h = eyeY - ((y - HORIZON) * col.z) / FOCAL;
+        const below = eyeY - ((y + 1 - HORIZON) * col.z) / FOCAL;
+        const band = Math.floor(h / COURSE);
+        if (masonry) {
+          if (band !== Math.floor(below / COURSE)) {
+            s.fb[i] = W;
+            continue;
+          }
+          // Running bond: every other course starts half a block along.
+          const offset = (band & 1) === 0 ? 0 : BLOCK / 2;
+          const across = (((along - offset) % BLOCK) + BLOCK) % BLOCK;
+          if (across < grain) {
+            // Dashed, so the joints between blocks sit behind the courses
+            // rather than turning the face into a grid of equal weight.
+            s.fb[i] = (y & 1) === 0 ? W : K;
+            continue;
+          }
+        }
+        // Firelight pools low on the wall and dies out going up, because a
+        // brazier stands on the floor.
+        const glow = lit * Math.max(0, 1 - h / FIRE_REACH);
+        if (glow > 0.08 && toned(cx, y, glow * FIRE_ON_STONE)) {
+          s.fb[i] = glow > 0.55 ? BY : Y;
+          continue;
+        }
+        // And the grain of the stone itself, near enough to be seen.
+        s.fb[i] =
+          masonry && hash(Math.floor(along), Math.floor(h)) < 34 ? W : K;
       }
     }
     x = end + 1;
@@ -616,41 +732,88 @@ function drawKeepStairs(
 ): void {
   if (interior.id !== "keep") return;
   const centreX = 4.5 * CELL;
-  const nearY = 4.28 * CELL;
-  const farY = 1.82 * CELL;
+  const nearY = 5.72 * CELL;
+  const farY = 8.18 * CELL;
   const halfWidth = 23;
   const count = 10;
-  let previousLeft: ProjectedPoint | null = null;
-  let previousRight: ProjectedPoint | null = null;
-  for (let i = 0; i <= count; i++) {
+  const rise = 68;
+  // Nothing sensible can be drawn from inside the flight: every tread in
+  // front of the eye projects wider than the screen and fills the chamber
+  // with its own risers. Standing level with the foot of the stair is as
+  // close as the drawing goes.
+  //
+  // The test follows the plan's bearing, and the plans were reversed so the
+  // way out is south and the compass stops lying in the doorway. She now
+  // comes at the flight from BELOW its foot in y, not above it.
+  const { ey } = eyeOf(cam);
+  if (ey > nearY) return;
+  // Each step is a tread and the riser under it, both filled solid before
+  // their edges go on. A bright line per step with the chamber showing
+  // between them reads as a ladder hung in the air; what makes it a stair is
+  // the dark face beneath every tread.
+  for (let i = 0; i < count; i++) {
     const p = i / count;
-    const y = nearY + (farY - nearY) * p;
-    const h = p * 68;
-    const left = projectPoint(cam, centreX - halfWidth, y, h);
-    const right = projectPoint(cam, centreX + halfWidth, y, h);
-    drawDepthLine(s, depth, left, right, i % 2 === 0 ? BW : W);
-    if (i > 0) {
-      drawDepthLine(s, depth, previousLeft, left, W);
-      drawDepthLine(s, depth, previousRight, right, W);
+    const q = (i + 1) / count;
+    const treadY = nearY + (farY - nearY) * p;
+    const backY = nearY + (farY - nearY) * q;
+    const low = p * rise;
+    const high = q * rise;
+    const tread = [
+      projectPoint(cam, centreX - halfWidth, treadY, low),
+      projectPoint(cam, centreX + halfWidth, treadY, low),
+      projectPoint(cam, centreX + halfWidth, backY, low),
+      projectPoint(cam, centreX - halfWidth, backY, low),
+    ];
+    const riser = [
+      projectPoint(cam, centreX - halfWidth, backY, low),
+      projectPoint(cam, centreX + halfWidth, backY, low),
+      projectPoint(cam, centreX + halfWidth, backY, high),
+      projectPoint(cam, centreX - halfWidth, backY, high),
+    ];
+    if (tread.some((c) => c === null)) continue;
+    fillQuad(s, depth, tread as ProjectedPoint[], K);
+    if (riser.every((c) => c !== null)) {
+      fillQuad(s, depth, riser as ProjectedPoint[], K);
+      drawDepthLine(s, depth, riser[3], riser[2], i % 2 === 0 ? BW : W);
     }
-    previousLeft = left;
-    previousRight = right;
+    // Nosing, and the stringers running up the flanks of the flight.
+    drawDepthLine(s, depth, tread[0], tread[1], W);
+    drawDepthLine(s, depth, tread[0], tread[3], W);
+    drawDepthLine(s, depth, tread[1], tread[2], W);
   }
-  const railHeight = 13;
-  drawDepthLine(
-    s,
-    depth,
-    projectPoint(cam, centreX - halfWidth, nearY, railHeight),
-    projectPoint(cam, centreX - halfWidth, farY, 68 + railHeight),
-    BC,
-  );
-  drawDepthLine(
-    s,
-    depth,
-    projectPoint(cam, centreX + halfWidth, nearY, railHeight),
-    projectPoint(cam, centreX + halfWidth, farY, 68 + railHeight),
-    BC,
-  );
+}
+
+/** Fill a convex projected quad, honouring the wall depth buffer. */
+function fillQuad(
+  s: Screen,
+  depth: Float32Array,
+  quad: readonly ProjectedPoint[],
+  colour: number,
+): void {
+  const top = Math.max(0, Math.floor(Math.min(...quad.map((p) => p.y))));
+  const bottom = Math.min(HUD_TOP - 1, Math.ceil(Math.max(...quad.map((p) => p.y))));
+  const z = quad.reduce((a, p) => a + p.z, 0) / quad.length;
+  for (let y = top; y <= bottom; y++) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < quad.length; i++) {
+      const a = quad[i];
+      const b = quad[(i + 1) % quad.length];
+      if (a.y === b.y) continue;
+      const t = (y - a.y) / (b.y - a.y);
+      if (t < 0 || t > 1) continue;
+      const x = a.x + (b.x - a.x) * t;
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+    if (lo > hi) continue;
+    const x0 = Math.max(0, Math.round(lo));
+    const x1 = Math.min(SCREEN_W - 1, Math.round(hi));
+    for (let x = x0; x <= x1; x++) {
+      if (depth[x] + 1 < z) continue;
+      s.fb[y * SCREEN_W + x] = colour;
+    }
+  }
 }
 
 // ------------------------------------------------------------------- frame
@@ -664,7 +827,8 @@ export function renderInterior(
   visibleActors: readonly Billboard[] = interior.actors,
 ): void {
   s.clear();
-  // A few motes of dust in the dark above, so the ceiling is not dead space.
+  drawCeiling(s, interior, cam);
+  // A few motes of dust hanging in the dark between the beams.
   for (let y = 4; y < HORIZON - 6; y += 5) {
     for (let x = 6; x < SCREEN_W; x += 11) {
       if (hash(x, y + 31) < 22) s.px(x, y, W);

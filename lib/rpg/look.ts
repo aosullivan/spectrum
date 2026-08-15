@@ -3,6 +3,11 @@
 // without forking the drawing code. The defaults are the Relief look the
 // user adopted on 2026-08-15 (superseding Dusk, adopted earlier the same
 // day); the older looks survive as presets for A/B.
+//
+// Two dials from the first prototype round — undergrowth cover and the
+// banded distance fade — retired in the merge with main's dither-shading
+// work: the mat density and the smooth `far` falloff in world.ts do those
+// jobs better, for every look at once.
 
 /**
  * How the designed-clash pass runs. "8x8" is the true ULA grid; "8x1" keeps
@@ -11,50 +16,36 @@
  */
 export type AttributeMode = "8x8" | "8x1" | "off";
 
-/**
- * How ground detail recedes into the dark. "thin" is the original scheme:
- * three hard bands of ever-sparser survivors, which reads as columns of
- * grit. "bayer" fades continuously through an ordered 4x4 mask instead.
- */
-export type FadeMode = "thin" | "bayer";
-
 export interface Look {
-  /** Undergrowth coverage multiplier; 1 is the classic moor. */
-  cover: number;
-  /** Bare ground becomes a deep earth tone (palette index 8) instead of black. */
+  /** Bare ground floors at a deep earth tone (palette index 8), not black. */
   earth: boolean;
-  /** Dithered horizon glow rising into the night sky. */
+  /** Thin dithered horizon glow rising into the night sky. */
   skyGlow: boolean;
   attribute: AttributeMode;
-  fade: FadeMode;
   /**
-   * The ULAplus fiction: terrain and sky resolve through 4-step value ramps
-   * (palette 16..23) — shaded ground, gradient night sky, a lit leyline
-   * verge. Subsumes `earth` and `skyGlow`.
+   * The ULAplus fiction: terrain and sky shade through 4-step value ramps
+   * (palette 16..23) — soil-floored ground, a gradient night sky, the
+   * leyline's verge lit. Subsumes `earth` and `skyGlow`.
    */
   ramps: boolean;
   /** Rolling value-noise relief; ridges occlude and stand against the sky. */
   hills: boolean;
 }
 
-/** The look as first shipped: void-black moor, 8x8 clash, banded fade. */
+/** The look as first shipped: void-black moor and the 8x8 clash. */
 const CLASSIC: Look = {
-  cover: 1,
   earth: false,
   skyGlow: false,
   attribute: "8x8",
-  fade: "thin",
   ramps: false,
   hills: false,
 };
 
-/** Denser ground, earth-toned bare soil, horizon glow, 8x1 weave, bayer fade. */
+/** Earth-floored ground, horizon glow, 8x1 weave. */
 const DUSK: Look = {
-  cover: 2.2,
   earth: true,
   skyGlow: true,
   attribute: "8x1",
-  fade: "bayer",
   ramps: false,
   hills: false,
 };
@@ -68,27 +59,17 @@ export function setLook(look: Partial<Look>): void {
   Object.assign(LOOK, look);
 }
 
-/** Ordered-dither thresholds 0..15; keep a pixel when its cell < coverage. */
-// prettier-ignore
-export const BAYER4 = new Uint8Array([
-   0,  8,  2, 10,
-  12,  4, 14,  6,
-   3, 11,  1,  9,
-  15,  7, 13,  5,
-]);
-
 /**
- * One preset per question the prototype round asked, kept for side-by-side
- * renders: each changes a single thing against `classic`, and `dusk` is the
- * adopted combination.
+ * One preset per question the prototype rounds asked, kept for side-by-side
+ * renders: each changes a single thing against `classic`, `dusk` combines
+ * the first round, and `relief` is the adopted default.
  */
 export const LOOK_PRESETS: Record<string, Look> = {
   baseline: { ...CLASSIC },
-  carpet: { ...CLASSIC, cover: 3.2 },
   earth: { ...CLASSIC, earth: true },
   skyglow: { ...CLASSIC, skyGlow: true },
   weave: { ...CLASSIC, attribute: "8x1" },
-  smooth: { ...CLASSIC, attribute: "off", fade: "bayer" },
+  smooth: { ...CLASSIC, attribute: "off" },
   dusk: { ...DUSK },
   ramps: { ...DUSK, ramps: true },
   relief: { ...RELIEF },

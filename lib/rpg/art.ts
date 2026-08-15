@@ -3,7 +3,7 @@
 // Drawn against the approved "V2 Leyline" concept; see docs/rpg-design.md.
 
 import { C, G, K, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
-import { sprite } from "@/lib/rpg/screen";
+import { foliage, sprite } from "@/lib/rpg/screen";
 
 /**
  * The keep at hero range: ruined left crown, collapsed curtain notch,
@@ -190,7 +190,7 @@ export const TREE_GNARLED_B = sprite(
 );
 
 /** A bare spike of a dead pine. (10x22) */
-export const TREE_DEAD_PINE = sprite(
+export const TREE_DEAD_PINE = foliage(
   [
     ".....g....",
     "....g.....",

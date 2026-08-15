@@ -11,6 +11,8 @@ export const FOCAL = 110;
 export const CAM_HEIGHT = 26;
 /** How far behind the hero the eye sits. */
 export const CAM_BACK = 32;
+/** Most a billboard may be blown up past the size it was drawn at. */
+const MAX_MAGNIFY = 4;
 
 export interface CameraState {
   x: number;
@@ -151,6 +153,13 @@ export function collectBillboards(
     } else if (h < 1.5 || h > HUD_TOP * 2.5) {
       continue;
     }
+    // Nothing is drawn at more than a few times the size it was drawn at.
+    // Past that there is no more information in the sprite, only bigger
+    // pixels: a forty-by-fourteen fallen sarsen taken to nine times scale
+    // is three hundred and seventy pixels of flat grey with black slabs in
+    // it, which reads as a brick wall rather than as a stone you are
+    // standing beside.
+    h = Math.min(h, it.sprite.h * MAX_MAGNIFY);
     if (it.maxScreenHeight !== undefined && h > it.maxScreenHeight) {
       h = it.maxScreenHeight;
       framedAtHud = true;
@@ -199,10 +208,16 @@ export function collectBillboards(
     const footY = it.framedAtHud
       ? Math.max(it.h + 2, Math.min(it.baseY, HUD_TOP))
       : Math.min(it.baseY, HUD_TOP);
-    // Far billboards dissolve into the dark like the terrain does — but
-    // landmarks never do: they already swap to low-detail LOD art at range,
-    // and a dithered castle reads as noise instead of a destination.
-    const dither = it.landmark ? 0 : it.z > 1600 ? 2 : it.z > 800 ? 1 : 0;
+    // Aerial perspective. Far billboards thin into the dark like the terrain
+    // does, and they have to start doing it much nearer than the old eight
+    // hundred units: once stone was drawn as solid pale mass rather than as
+    // speckle, forty distant sarsens stacked into one white band along the
+    // horizon and buried the hills behind it. Halving at 420 and quartering
+    // at 900 is what puts air between the moor and its skyline.
+    //
+    // Landmarks never dissolve: they already swap to low-detail LOD art at
+    // range, and a dithered castle reads as noise instead of a destination.
+    const dither = it.landmark ? 0 : it.z > 900 ? 2 : it.z > 420 ? 1 : 0;
     return {
       z: it.z,
       paint: (s: Screen) => {

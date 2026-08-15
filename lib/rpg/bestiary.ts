@@ -166,29 +166,31 @@ export const SPIDER = sprite(
 );
 
 /**
- * A forester of the greenwood: hooded, green-clad, spear grounded. Bright
- * green edges the dark green body, so a warden reads against the moor's
- * own green rather than dissolving into it.
- * (13x16)
+ * A forester of the greenwood: hooded, cloaked, spear grounded and
+ * gripped. Shoulders broader than the hood and an arm crossing to the
+ * shaft — a plain hooded taper at this size is a small conifer.
+ * (14x18)
  */
 export const ELF_ARCHER = sprite(
   [
-    "....GGG....H.",
-    "..GGGGGGG..H.",
-    "....gggg...w.",
-    "....gkkg...w.",
-    "....gggg...w.",
-    "...GGGGGG..w.",
-    "..GggggggG.w.",
-    "..GggggggG.w.",
-    "..GggggggG.w.",
-    "...gggggg..w.",
-    "...gggggg..w.",
-    "...gg..gg..w.",
-    "...gg..gg..w.",
-    "...gg..gg..w.",
-    "..GGg..gGG...",
-    ".GG......GG..",
+    ".....G....H...",
+    ".....G...Hw...",
+    "....GgG...w...",
+    "....kgk...w...",
+    "....Ggg...w...",
+    ".....G....w...",
+    "..GGGgGGG.w...",
+    "..Ggggggg.w...",
+    "..GggggggHw...",
+    "..Gggggg.Gw...",
+    ".G.Ggggg..w...",
+    ".G.Ggggg..w...",
+    ".GGggggg..w...",
+    "....G.G...w...",
+    "....G.G...w...",
+    "....G..G..w...",
+    "...G...G..w...",
+    "..Gg...GG.w...",
   ],
   { g: G, G: BG, w: W, H: BW, k: K },
 );
@@ -255,101 +257,121 @@ export const POOL_RIPPLE = sprite(
  * A wanderer of the greenwood under a wide brim, leaning on a staff. Grey
  * cloth edged in white — the neutral folk take no colour of their own, which
  * is how you tell them from the greenwood's green and the dead's cyan.
- * (14x24)
+ *
+ * Because he has no colour of his own, the outline has to carry him: a brim
+ * wider than his shoulders, a staff standing clear of the body, and black
+ * carved between beard, arm and the fall of the coat. Undivided, a single
+ * grey mass this size is a bell with a hat on it.
+ * (16x24)
  */
 export const NPC_HERMIT = sprite(
   [
-    "......HHH.....",
-    ".....HwwwH....",
-    "...HHHHHHHHH..",
-    ".....wkkkw....",
-    ".H...wwwww....",
-    ".H..HwwwwwH...",
-    ".H..HwwwwwH...",
-    ".H.HHwwwwwHH..",
-    ".H.HwwwwwwwH..",
-    ".H.HwwwwwwwH..",
-    ".HHHwwwwwwwH..",
-    ".H.HwwwwwwwH..",
-    ".H.HwwHwwHwwH.",
-    ".H.HwwHwwHwwH.",
-    ".H.HwwHwwHwwH.",
-    ".H.HwwHwwHwwH.",
-    ".H.HwwwwwwwH..",
-    ".H.HwwwwwwwH..",
-    ".H..HwwwwwH...",
-    ".H..HwwwwwH...",
-    ".H..Hww.wwH...",
-    ".H..Hw...wH...",
-    "....HH...HH...",
-    "...HH.....HH..",
+    "................",
+    ".............HH.",
+    ".............HH.",
+    "...HHHHHHHHH..H.",
+    "..HHHHwwwHHHH.H.",
+    "......kwk.....H.",
+    ".....HwwwH....H.",
+    ".....HwwwH....H.",
+    ".....HwwwH....H.",
+    ".....kwwwk....H.",
+    "....HwkkkwHH..H.",
+    "....HwwwwkkkHHH.",
+    "....HwwwwwH...H.",
+    "....HwkwwwH...H.",
+    "....HwwwwkH...H.",
+    "...HwwkwwwwH..H.",
+    "...HwwwwwkwH..H.",
+    "...HwwkwwwwH..H.",
+    "...HwwwwwkwH..H.",
+    "...HwwkwwwwH..H.",
+    "..HwwwwwwkwwH.H.",
+    "..HwwHHwwHwHH.H.",
+    "...HH..HH.H...H.",
+    "....H...H.....H.",
   ],
   { w: W, H: BW, k: K },
 );
 
 /**
- * The ghost of a knight, still in his ruined helm, one arm
- * raised in warning. You can see the wall through his ribs.
+ * The ghost of a knight, still in his ruined helm, one arm raised in
+ * warning. You can see the wall through his ribs.
+ *
+ * The raised arm is what tells him apart at twenty pixels, and the notch out
+ * of the helm's crest does more for "ruined" than any amount of detail on
+ * the face. The ribs are cut clean through and the legs fray out instead of
+ * ending in feet, so he is transparent where the old solid figure only
+ * claimed to be.
  * (14x24)
  */
 export const NPC_SHADE = sprite(
   [
-    ".....CCCC.....",
-    "....CccccC....",
-    "....CkcckC....",
-    "....CccccC....",
-    ".....CccC.....",
-    "......cc......",
-    "...CccccccC...",
-    ".C.CccccccC.C.",
-    ".C.CccccccC.C.",
-    ".C.CccccccC.C.",
-    "..CCccccccCC..",
-    "...CccccccC...",
-    "...Ccc..ccC...",
-    "...Ccc..ccC...",
-    "...Ccc..ccC...",
-    "...CccccccC...",
-    "...CccccccC...",
-    "....CccccC....",
-    "....CccccC....",
-    "....Cc.ccC....",
-    ".....c.c.c....",
-    "....c...c.c...",
-    "...c.....c....",
-    "..c.......c...",
+    "........C.....",
+    "......C.C.....",
+    "....CCcCC.....",
+    "....CcccC.....",
+    ".CC.CkkkC.....",
+    ".CC.CcccC.....",
+    "..CCCCcCC.....",
+    "..CC..C.......",
+    "...CCCcCCC....",
+    "...CcccccC....",
+    "...CkkkkkcC...",
+    "...CcckcccC...",
+    "...CkkkkkC.C..",
+    "...CcccccC.C..",
+    "...CkkkkkC.C..",
+    "...CcCccCC....",
+    "...CC.CC.C....",
+    "...C.CC.CC....",
+    "....CC.CC.....",
+    "....C.CC......",
+    ".....CC.......",
+    "...C.C.CC.....",
+    "....C..C......",
+    ".....C........",
   ],
   { c: C, C: BC, k: K },
 );
 
 /**
- * A seated scholar under a wide brim, a small ley-light cupped in her
- * hands. Yellow is the scholarly ink on this sheet, and it is the only
- * warm colour indoors — which is why the sanctum reads as occupied.
- * (14x20)
+ * A seated scholar under a wide brim, a small ley-light cupped in her hands.
+ * Yellow is the scholarly ink on this sheet, and it is the only warm colour
+ * indoors — which is why the sanctum reads as occupied.
+ *
+ * Drawn in folds rather than as a filled shape: she stands two paces from the
+ * eye at the moment you speak to her, and a flat cone of one yellow at that
+ * size is a placeholder next to a moor drawn entirely in stipple. Black is
+ * doing the work — every shadow in the robe is paper showing through.
+ * (16x24)
  */
 export const NPC_SEER = sprite(
   [
-    "......YYY.....",
-    ".....YyyyY....",
-    "...YYYYYYYYY..",
-    ".....ykkky....",
-    "......yyy.....",
-    "....YyyyyyY...",
-    "...YyyyyyyyY..",
-    "...YyycccyyY..",
-    "...YyycHcyyY..",
-    "...YyycccyyY..",
-    "...YyyyyyyyY..",
-    "..YyyyyyyyY...",
-    "..YyyyyyyyY...",
-    "..YyyyyyyyY...",
-    ".YyyyyyyyyyY..",
-    ".YyyyyyyyyyY..",
-    ".YyyyyyyyyyY..",
-    "YyyyyyyyyyyyY.",
-    "YyyyyyyyyyyyY.",
-    ".YYYYYYYYYYYY.",
+    "......YYYY......",
+    ".....YyyyyY.....",
+    ".....YyyyyY.....",
+    "....YyyyyyyY....",
+    ".YYYYYYYYYYYYYY.",
+    ".YyyyyyyyyyyyyY.",
+    "..YkkkkkkkkkkY..",
+    "...ykkkkkkkky...",
+    "...ykccyycckY...",
+    "...ykccyycckY...",
+    "...yyykkkkyyy...",
+    "....yyykkyyy....",
+    "..Yyyyyyyyyyyy..",
+    ".Yyyyyyyyyyyyyy.",
+    ".Yykyyykyyyykyy.",
+    "Yyykyyykkyyykyyy",
+    "Yyykyyykkyyykyyy",
+    "Yyykywwwwwwykyyy",
+    "Yyykywwcccwwykyy",
+    "YyykywwcHcwwykyy",
+    "Yyykywwcccwwykyy",
+    "Yyykywwwwwwykyyy",
+    "Yyykyyyyyyyykyyy",
+    ".YYYYYYYYYYYYYY.",
   ],
-  { y: Y, Y: BY, H: BW, c: BC, k: K },
+  { y: Y, Y: BY, H: BW, w: W, c: BC, k: K },
 );
