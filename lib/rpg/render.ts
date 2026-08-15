@@ -46,11 +46,12 @@ import {
   type CameraState,
 } from "@/lib/rpg/projection";
 import { drawPanel, type Blip, type DialPlan } from "@/lib/rpg/panel";
-import { collectFaces } from "@/lib/rpg/structures";
+import { collectFaces, collectLeaf, type FaceDraw } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import {
   CIRCLE_POS,
   DEAD_WOOD_X,
+  DOORWAYS,
   GROVE_POS,
   HENGE_POS,
   HERMITAGE_BOXES,
@@ -911,6 +912,8 @@ export function renderFrame(
   platform?: { x: number; y: number; halfX: number; halfY: number; height: number },
   /** Current cast, if its brief flash has not expired. */
   lightning?: LightningState,
+  /** How far each door has swung, by doorway id. Absent means shut. */
+  doors?: ReadonlyMap<string, number>,
 ): void {
   s.clear();
   drawSky(s, cam, cam.x < DEAD_WOOD_X);
@@ -943,10 +946,22 @@ export function renderFrame(
           lod: [{ minH: 17, sprite: KEEP_NEAR }],
         }]
       : [];
+  // Door leaves are collected separately from the masonry they hang in: a
+  // swung door is at an angle to both world axes, so it cannot be a box.
+  const leaves: FaceDraw[] = [];
+  for (const door of DOORWAYS) {
+    if (omit?.has("keep") && door.id === "keep-gate") continue;
+    if (Math.hypot(cam.x - door.x, cam.y - door.y) > 900) continue;
+    for (const leaf of door.leaves) {
+      const job = collectLeaf(cam, leaf, doors?.get(door.id) ?? 0);
+      if (job) leaves.push(job);
+    }
+  }
   // Masonry and sprites are interleaved by depth, so a tree in front of the
   // keep occludes it and one behind does not. Standing on the keep's own
   // leads, its masonry is omitted — you cannot see a building from inside it.
   const jobs = [
+    ...leaves,
     ...(omit?.has("keep") || keepDistance > 800 ? [] : collectFaces(cam, KEEP_BOXES)),
     ...(villageDistance > 850 ? [] : collectFaces(cam, VILLAGE_BOXES)),
     ...(hermitageDistance > 700 ? [] : collectFaces(cam, HERMITAGE_BOXES)),
