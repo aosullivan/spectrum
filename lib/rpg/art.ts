@@ -2,7 +2,7 @@
 // (one char per pixel, '.' transparent) — the agreed authoring format.
 // Drawn against the approved "V2 Leyline" concept; see docs/rpg-design.md.
 
-import { C, G, K, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
+import { B, C, G, K, R, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
 import { sprite } from "@/lib/rpg/screen";
 
 /**
@@ -134,6 +134,26 @@ export const KEEP_FAR = sprite(
 // — because bone-wide line art dies into loose dots by fourteen pixels (see
 // the skeleton measurement). Lit edge to the moon (west), body plain white,
 // knots bitten out in black, a green tuft or two holding each to the ground.
+//
+// Colour lives on the wood, never in it. The trees stay leafless — that is the
+// concept and it is not up for renegotiation — but three inks are laid on the
+// bark, and between them they are most of what the old woods have to say in
+// colour, since the trunks are what fills the frame:
+//
+//   `s` indigo   the shaded east flank. This rim was already drawn, in black,
+//                which on black paper is not a shadow at all — it is a hole
+//                the size and shape of the shadow. One pixel of cold sky-light
+//                down the lee reads as a ROUND trunk for the first time, and
+//                costs nothing: the silhouette is unchanged to the pixel.
+//   `g` olive    lichen up the shaded flank, the same green already tufting
+//                at each foot, so the wood gains colour without gaining a hue
+//                it did not have.
+//   `r` ember    bracket fungus eating the base on the lit side — the one warm
+//                note per tree, and rationed to that, or a dying wood starts
+//                to look decorated.
+//
+// All three sit INSIDE the existing mass. Nothing here widens a trunk or adds
+// a limb, so the concept silhouettes survive exactly as PR #13 drew them.
 
 /**
  * A great bone elm: candelabra limbs rising from a single trunk, each
@@ -160,30 +180,30 @@ export const TREE_GNARLED_A = sprite(
     ".........bw..ww.ww.........",
     ".........ww..ww.ww.........",
     "..........bw.wwww..........",
-    "..........ww.wwwk..........",
-    "..........wwbwwwk..........",
-    "...........bwwwwk..........",
-    "...........bwwwwk..........",
-    "...........bwwwwk..........",
-    "...........bwwkwk..........",
-    "...........bwwwk...........",
-    "...........bwwwk...........",
-    "...........bkwwk...........",
-    "...........bwwwk...........",
-    "...........bwwwk...........",
-    "...........bwwwk...........",
-    "...........bwwwk...........",
-    "...........bwwwk...........",
-    "...........bwwwwk..........",
-    "...........bwwwwk..........",
-    "..........bwwwwwk..........",
-    "..........bwwwwwkk.........",
-    ".........bwwwwwwwkk........",
+    "..........ww.wwws..........",
+    "..........wwbwwws..........",
+    "...........bwwwws..........",
+    "...........bwwwgs..........",
+    "...........bwwwgs..........",
+    "...........bwwkws..........",
+    "...........bwwws...........",
+    "...........bwwws...........",
+    "...........bkwws...........",
+    "...........bwwws...........",
+    "...........bwwgs...........",
+    "...........bwwgs...........",
+    "...........bwwws...........",
+    "...........bwwws...........",
+    "...........bwwwws..........",
+    ".........rrbwwwws..........",
+    ".........rbwwwwws..........",
+    "..........bwwwwwss.........",
+    ".........bwwwwwwwss........",
     "........bww.wwk..kw........",
     "......g.bw..gww..gw.g......",
     ".........g..g.g...g........",
   ],
-  { w: W, b: BW, k: K, g: G },
+  { w: W, b: BW, k: K, g: G, s: B, r: R },
 );
 
 /**
@@ -211,20 +231,20 @@ export const TREE_GNARLED_C = sprite(
     "..........ww...ww..ww..........",
     "..........bww..wwwww...........",
     "...........wwwwwwww............",
-    "..........bwwwwwwk.............",
-    "..........bwwwwwwk.............",
-    "..........bwwkwwwk.............",
-    "..........bwwwwwwk.............",
-    "..........bwwwwwwk.............",
-    "..........bwwwwwwk.............",
-    "..........bwwwwwwk.............",
-    ".........bwwwwwwwkk............",
-    ".........bwwwwwwwkk............",
+    "..........bwwwwwws.............",
+    "..........bwwwwwgs.............",
+    "..........bwwkwwws.............",
+    "..........bwwwwwgs.............",
+    "..........bwwwwwws.............",
+    "........rrbwwwwwws.............",
+    ".........rbwwwwwws.............",
+    ".........bwwwwwwwss............",
+    ".........bwwwwwwwss............",
     "........bwww.wwwwkkk...........",
     "......g.bww..gww.kk.g..........",
     ".........g..g..g....g..........",
   ],
-  { w: W, b: BW, k: K, g: G },
+  { w: W, b: BW, k: K, g: G, s: B, r: R },
 );
 
 /** A young bone tree, wind-bent, one clean fork. (13x18) */
@@ -238,18 +258,18 @@ export const TREE_GNARLED_B = sprite(
     "...w..wbw....",
     "...bw.ww.....",
     "....wwww.....",
-    ".....ww......",
-    ".....ww......",
-    ".....wk......",
-    ".....ww......",
-    "....bww......",
-    "....bww......",
-    "....bwk......",
-    "...bwwwk.....",
+    ".....wws.....",
+    ".....wgs.....",
+    ".....ws......",
+    ".....wws.....",
+    "....bwws.....",
+    "....bwgs.....",
+    "..rrbws......",
+    "...bwwws.....",
     "..g.www.g....",
     "....g.g......",
   ],
-  { w: W, b: BW, k: K, g: G },
+  { w: W, b: BW, k: K, g: G, s: B, r: R },
 );
 
 /** A dead pine spike: drooped stub whorls on a solid mast. (11x24) */
@@ -271,16 +291,16 @@ export const TREE_DEAD_PINE = sprite(
     "...bwww.w..",
     "..b.www....",
     "...wwww....",
-    "....wk.....",
-    "....ww.....",
-    "....wk.....",
-    "....ww.....",
-    "...bwwk....",
-    "...bwwk....",
+    "....ws.....",
+    "....wgs....",
+    "....ws.....",
+    "....wws....",
+    "...bwws....",
+    ".rrbwws....",
     "..gwwwwg...",
     "....g.g....",
   ],
-  { w: W, b: BW, k: K, g: G },
+  { w: W, b: BW, k: K, g: G, s: B, r: R },
 );
 
 /**
@@ -297,12 +317,12 @@ export const TREE_BONE_FAR = sprite(
     ".wb.w.b.",
     "..www.w.",
     "..wwww..",
-    "...ww...",
-    "...wk...",
-    "...ww...",
-    "..bwwk..",
+    "...ws...",
+    "...wgs..",
+    "...wws..",
+    "..bwws..",
   ],
-  { w: W, b: BW, k: K },
+  { w: W, b: BW, k: K, g: G, s: B },
 );
 
 // The stones, per the concept: hulking pale monoliths under caps of moss —
@@ -399,6 +419,53 @@ export const STONE_LEANING = sprite(
     ".ggwkkkkkgg......",
   ],
   { w: W, b: BW, k: K, g: G, h: BG },
+);
+
+// The dead wood's understory. It had none — the greenwood got bracken, scrub
+// and fungi to break it into clearings, while the old woods got trees and bare
+// floor, so everything between the litter and the crowns was empty dark. These
+// two fill that gap, and they are where the band's warm colour lives at the
+// height you are actually looking while you walk.
+
+/**
+ * A clump of last year's bracken, collapsed and gone over, with the arching
+ * frond tips still catching the low sun. Drawn as a domed mass with black
+ * bitten out of it rather than as drawn fronds: at the ten-odd pixels this
+ * stands on screen, fronds are line art, and line art dies. (22x10)
+ */
+export const DEAD_BRACKEN = sprite(
+  [
+    ".......y....y.........",
+    "......yyy..yyy........",
+    ".....yyyyyyyyyy..y....",
+    "....yyyyyyyyyyyyyyy...",
+    "...yyyyykyyyyyyyyyyy..",
+    "..yyyyrryyyykyyrryyyy.",
+    "..yrrkyyyrrryyyykyyrr.",
+    "...rryyyykyrrryyyyrr..",
+    "...WrryyyyyyykrryyW...",
+    "....W...WW.....W......",
+  ],
+  { W: W, y: Y, r: R, k: K },
+);
+
+/**
+ * Bracket fungus growing in tiers out of something that has fallen: gold
+ * shelves above, ember gills beneath. The brightest thing at floor level, so
+ * it is kept small and rationed hard — see how sparsely it is placed. (14x8)
+ */
+export const FUNGI_SHELF = sprite(
+  [
+    "....YY........",
+    "...YyyY..YY...",
+    "..YyyyyY.YyY..",
+    ".YyyyyyyYyyyY.",
+    "..rrrrr.rrrr..",
+    "...YYY..YY....",
+    "..YyyyY.YyyY..",
+    "...rrr...rr...",
+  ],
+  { Y: BY, y: Y, r: R },
 );
 
 /**
