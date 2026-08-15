@@ -217,6 +217,18 @@ export const EMBER_DUSK = table(
   "150d06", "221709", "31220e", "422f14", "0a0510", "180b28", "281444", "3c2060",
 );
 
+/**
+ * Torchlit stone, for interiors: slate blue-grey masonry instead of signal
+ * blue, amber fire instead of acid yellow, the ley a deep-water teal, whites
+ * gone to bone. The one palette where nothing is allowed to shout — a keep
+ * hall is all half-light, and the saturated table read as a stage set.
+ */
+export const TORCHLIT = table(
+  "07080c", "3c4c72", "b02820", "8c3898", "3c9050", "3a9eae", "d09a30", "a8a69a",
+  "141008", "6a86c0", "ff5040", "d858e8", "52d878", "7ae8f2", "ffd75e", "f2f2ee",
+  "150d06", "221709", "31220e", "422f14", "0a0510", "180b28", "281444", "3c2060",
+);
+
 // --------------------------------------------------------------- night key
 //
 // The `night` look lifts the sky ramp from near-black to a just-visible
@@ -228,6 +240,8 @@ export const EMBER_DUSK = table(
 // ULAplus palette reload did, so the fiction holds, and keeping it a
 // runtime swap keeps every older preset bit-for-bit when the dial is off.
 
+// TORCHLIT is absent on purpose: it paints interiors, and no interior ever
+// draws the sky.
 const NIGHT_SKY: ReadonlyArray<[PaletteTable, readonly Rgb[]]> = [
   [ULA_STANDARD, ["0a1430", "132242", "1c3058", "24386a"].map(rgbOf)],
   [PAL_TELEVISION, ["0c1428", "141f3a", "1c2c50", "263862"].map(rgbOf)],
@@ -258,6 +272,7 @@ export function applyNightSky(on: boolean): void {
     }
   });
 }
+
 
 /** Palette index -> [r, g, b]. The table in force when no region says otherwise. */
 export const PALETTE_RGB: PaletteTable = ULA_STANDARD;

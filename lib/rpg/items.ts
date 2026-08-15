@@ -1,7 +1,7 @@
 // Items you can carry off, and the marker that says "leave here".
 // String bitmaps, one char per pixel, '.' transparent.
 
-import { C, K, M, W, Y, BC, BW, BY } from "@/lib/rpg/palette";
+import { B, C, K, M, W, Y, BC, BW, BY } from "@/lib/rpg/palette";
 import { sprite } from "@/lib/rpg/screen";
 
 /**
@@ -137,46 +137,49 @@ export const ITEM_SCROLL = sprite(
 );
 
 /**
- * The way out: a doorway filled with ley-light, spilling onto
- * the floor. Meant to be unmistakable from across a dark chamber.
- * (28x34)
+ * The way out: a round-arched doorway of solid stone flooded with
+ * ley-light, a white-hot seam down its centre, the glow spilling out
+ * across the flags. Meant to be unmistakable from across a dark chamber.
+ * (26x36)
  */
 export const EXIT_ARCH = sprite(
   [
-    ".............w..............",
-    "..............w.............",
-    ".............w..............",
-    ".WWWWWWWWWWWWWWWWWWWWWWWWWW.",
-    ".WkkkkkWkkkkkcckkkkkWkkkkkW.",
-    ".WkkkkkWkkkkcwwckkkkWkkkkkW.",
-    ".WkkkkkWkkkkkcckkkkkWkkkkkW.",
-    ".WWWWWWWWWWWWWWWWWWWWWWWWWW.",
-    ".WkkWkkkkkWWWWWWWWckkkkWkkW.",
-    "..WkWkkkkWcCCwwCCcWkkkkWkW..",
-    "..WkWkkkWccCCwwCCccWckkWkW..",
-    "..WkWkkWCCCCwwwwCCCCWkkWkW..",
-    "..WWWWWWcccCCwwCCcccWWWWWW..",
-    "..WkkWkWcccCCwwCCcccWkWkkW..",
-    "..WkkWkWcccCCwwCCcccWkWkkW..",
-    "..WkkWkWcccCCwwCCcccWkWkkW..",
-    "..WWWWWWCCCCwwwwCCCCWWWWWW..",
-    "..WkWkkWcccCCwwCCcccWkkWkW..",
-    "..WkWkkWcccCCwwCCcccWkkWkW..",
-    "..WkWkkWcccCCwwCCcccWkkWkW..",
-    "..WWWWWWcccCCwwCCcccWWWWWW..",
-    "..WkkWkWCCCCwwwwCCCCWkWkkW..",
-    "..WkkWkWcccCCwwCCcccWkWkkW..",
-    "..WkkWkWcccCCwwCCcccWkWkkW..",
-    "..WWWWWWcccCCwwCCcccWWWWWW..",
-    "..WkkkkWcccCCwwCCcccWkkkkW..",
-    "WWkkkkkWCCCCwwwwCCCCWkkkkkWW",
-    "WWWWWWWWcccCCwwCCcccWWWWWWWW",
-    "....c.cccCCCCCCCCCCcccc.....",
-    "...c.c.ccCCCCCCCCCCccc.c.c..",
-    "c.ccccccccccccccccccccccc.c.",
-    ".c.c.c.c.c.c.c.c.c.c.c.c.c.c",
-    "c.c.ccc.ccc.ccc.ccc.ccc.c.c.",
-    ".c...c.c.c.c.c.c.c.c.c...c..",
+    ".........BBBBBBBB.........",
+    ".......BBBBBBBBBBBB.......",
+    ".....BBBBBBKBBBBBBBB......",
+    "....BBBBBWWWWWWWWBBBBB....",
+    "...BBBKBBWccCCccWBBKBBB...",
+    "..BBBBBWWcCCLLCCcWWBBBBB..",
+    "..BBKBBWcCCLLLLCCcWBBKBB..",
+    ".BBBBBWcCCCLLLLCCCcWBBBBB.",
+    ".BBKBBWcCCCLLLLCCCcWBBKBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BKBBWccCCCLLLLCCCccWBBKB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBKBWccCCCLLLLCCCccWBKBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BKBBWccCCCLLLLCCCccWBBKB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBKBWccCCCLLLLCCCccWBKBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BKBBWccCCCLLLLCCCccWBBKB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBKBWccCCCLLLLCCCccWBKBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    ".BBBBWccCCCLLLLCCCccWBBBB.",
+    "BBBBBWcCCCCLLLLCCCCcWBBBBB",
+    "BBKBBWcCCCCLLLLCCCCcWBBKBB",
+    "....cccCCCCLLLLCCCCccc....",
+    "..c.ccCCCCCLLLLCCCCCcc.c..",
+    ".c.cccCCCCCcLLcCCCCCccc.c.",
+    ".c.c.c.c.cCcCcCc.c.c.c.c.c",
+    "..c...c..cCc..cCc..c...c..",
   ],
-  { W: W, k: K, w: BW, c: C, C: BC },
+  { B: B, K: K, W: W, c: C, C: BC, L: BW },
 );
