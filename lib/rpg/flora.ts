@@ -3,7 +3,7 @@
 // trees in art.ts — the two woods must never be mistaken for each other.
 
 import { C, G, K, W, Y, BC, BG, BW, BY } from "@/lib/rpg/palette";
-import { sprite } from "@/lib/rpg/screen";
+import { foliage, sprite } from "@/lib/rpg/screen";
 
 /**
  * A great spreading oak of the living greenwood — broad, lobed,
@@ -17,7 +17,7 @@ import { sprite } from "@/lib/rpg/screen";
  * Solid lobes with a bright sun side hold their shape at every distance.
  * (34x42)
  */
-export const TREE_OAK = sprite(
+export const TREE_OAK = foliage(
   [
     "..................................",
     "..............gghh.gg.............",
@@ -71,7 +71,7 @@ export const TREE_OAK = sprite(
  * than a dithered mass, so "airy" survives being shrunk to ten pixels.
  * (20x38)
  */
-export const TREE_BIRCH = sprite(
+export const TREE_BIRCH = foliage(
   [
     "....................",
     "..........g.........",
@@ -120,7 +120,7 @@ export const TREE_BIRCH = sprite(
  * own shadow beneath and needles reaching past the skirt.
  * (21x42)
  */
-export const TREE_PINE_LIVE = sprite(
+export const TREE_PINE_LIVE = foliage(
   [
     ".....................",
     "..........h..........",
@@ -172,7 +172,7 @@ export const TREE_PINE_LIVE = sprite(
  * A low leafy shrub: two overlapping masses with a lit top edge.
  * (18x11)
  */
-export const BUSH = sprite(
+export const BUSH = foliage(
   [
     "..................",
     "..................",

@@ -45,12 +45,17 @@ import {
 } from "@/lib/rpg/render";
 import { Screen } from "@/lib/rpg/screen";
 import { paletteAt } from "@/lib/rpg/regions";
-import { drawAreaMap } from "@/lib/rpg/areamap";
+import {
+  drawAreaMap,
+  type MapState,
+  type MarkKind,
+} from "@/lib/rpg/areamap";
 import {
   CIRCLE_POS,
   GATE,
   GROVE_POS,
   HENGE_POS,
+  HERMITAGE_POS,
   KEEP_POS,
   VILLAGE_POS,
   DEAD_WOOD_X,
@@ -99,6 +104,12 @@ const OMIT_ON_ROOF: ReadonlySet<string> = new Set(["keep"]);
 
 /** Indoors the mage drifts a little slower — the chambers are close. */
 const INDOOR_SCALE = 0.85;
+
+/**
+ * How far out the open map marks creatures. The chart is fully revealed, but
+ * what is moving on it is only known where she can sense it.
+ */
+const MAP_MARK_RANGE = 520;
 
 interface Wraith extends Billboard {
   id: string;
@@ -176,7 +187,6 @@ export class Game {
     gems: [true, true, false],
     place: "THE MOOR",
     carried: [],
-    blips: [],
   };
 
   /** True while the area map is open; the world holds still behind it. */
@@ -545,6 +555,7 @@ export class Game {
     if (near(HENGE_POS, 260)) return "THE HENGE";
     if (near(GROVE_POS, 210)) return "THE GROVE";
     if (near(CIRCLE_POS, 160)) return "STONE CIRCLE";
+    if (near(HERMITAGE_POS, 170)) return "THE HERMITAGE";
     if (this.cam.x < DEAD_WOOD_X) return "ANCIENT WOODS";
     return "THE MOOR";
   }
@@ -553,25 +564,56 @@ export class Game {
   private refreshPanel(): void {
     this.hud.place = this.whereAmI();
     this.hud.carried = this.carried;
-    // Indoors the radar shows the room; outdoors, whatever is near enough.
+  }
+
+  /** What a thing in a room is, to the map's eye. */
+  private markOf(actor: Actor): MarkKind {
+    const kind = actor.interaction?.kind;
+    if ((actor as Actor & { hostile?: boolean }).hostile) return "foe";
+    if (kind === "pickup") return "item";
+    if (kind === "exit" || kind === "enter" || kind === "roof") return "way";
+    return "friend";
+  }
+
+  /**
+   * Everything the open map should mark. Built here rather than every frame:
+   * the map is modal, so this runs while the world is stopped and the cost is
+   * paid once per keypress instead of sixty times a second.
+   */
+  private mapState(): MapState {
+    const cam = { x: this.cam.x, y: this.cam.y, yaw: this.cam.yaw };
     if (this.interior && !this.onRoof) {
-      this.hud.plan = { rows: this.interior.plan, cell: CELL };
-      this.hud.blips = this.interior.actors
-        .filter((a) => !this.taken.has(a.id))
-        .map((a) => ({ x: a.x, y: a.y, hostile: false }));
-      return;
+      return {
+        cam,
+        place: this.hud.place,
+        plan: {
+          rows: this.interior.plan,
+          cell: CELL,
+          leyCellX: this.interior.leyCellX,
+        },
+        marks: this.interior.actors
+          .filter((a) => !this.taken.has(a.id) && !this.enemyDeaths.has(a.id))
+          .map((a) => ({ x: a.x, y: a.y, kind: this.markOf(a) })),
+      };
     }
-    this.hud.plan = undefined;
-    this.hud.blips = [
-      ...DENIZENS.filter((d) => !this.enemyDeaths.has(d.id)).map((d) => ({
-        x: d.x,
-        y: d.y,
-        hostile: d.hostile,
-      })),
-      ...this.wraiths
-        .filter((w) => !this.enemyDeaths.has(w.id))
-        .map((w) => ({ x: w.x, y: w.y, hostile: true })),
-    ];
+    const near = (x: number, y: number) =>
+      Math.hypot(x - this.cam.x, y - this.cam.y) <= MAP_MARK_RANGE;
+    return {
+      cam,
+      place: this.hud.place,
+      marks: [
+        ...DENIZENS.filter(
+          (d) => !this.enemyDeaths.has(d.id) && near(d.x, d.y),
+        ).map((d) => ({
+          x: d.x,
+          y: d.y,
+          kind: (d.hostile ? "foe" : "friend") as MarkKind,
+        })),
+        ...this.wraiths
+          .filter((w) => !this.enemyDeaths.has(w.id) && near(w.x, w.y))
+          .map((w) => ({ x: w.x, y: w.y, kind: "foe" as MarkKind })),
+      ],
+    };
   }
 
   render(screen: Screen): void {
@@ -587,7 +629,7 @@ export class Game {
       a.id === near?.id && a.id !== "wyrm" ? { ...a, highlight: true } : a;
     this.refreshPanel();
     if (this.mapOpen) {
-      drawAreaMap(screen, this.cam, this.hud.place);
+      drawAreaMap(screen, this.mapState());
       return;
     }
     if (this.onRoof) {
@@ -619,7 +661,7 @@ export class Game {
         visible,
       );
       if (this.lightning) drawLightning(screen, this.cam, this.t, this.lightning);
-      drawOverlay(screen, this.hud, this.t, overlay, this.cam);
+      drawOverlay(screen, this.hud, this.t, overlay);
       return;
     }
     const visibleWraiths = this.wraiths

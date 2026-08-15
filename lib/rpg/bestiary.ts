@@ -336,33 +336,42 @@ export const NPC_SHADE = sprite(
 );
 
 /**
- * A scholar seated cross-legged under a wide brim, a ley-light cupped
- * in her hands. Lap, torso and knees are separate masses with black cut
- * between them: one undivided taper is a lampshade.
- * (16x20)
+ * A seated scholar under a wide brim, a small ley-light cupped in her hands.
+ * Yellow is the scholarly ink on this sheet, and it is the only warm colour
+ * indoors — which is why the sanctum reads as occupied.
+ *
+ * Drawn in folds rather than as a filled shape: she stands two paces from the
+ * eye at the moment you speak to her, and a flat cone of one yellow at that
+ * size is a placeholder next to a moor drawn entirely in stipple. Black is
+ * doing the work — every shadow in the robe is paper showing through.
+ * (16x24)
  */
 export const NPC_SEER = sprite(
   [
-    "................",
-    "................",
-    "................",
-    "......YYYYY.....",
-    ".....YyyyyyY....",
-    ".......kyk......",
-    ".......Yyy......",
-    ".......Yyy......",
-    ".....YYyyyYY....",
-    ".....Yyyyyyy....",
-    ".....Yyyyyyy....",
-    ".....YyHcyyy....",
-    ".....Yyycyyy....",
-    "....YyyyyyyyY...",
-    ".YYYyyyyyyyyyYYY",
-    "Yyyyykyyyyykyyyy",
-    "Yyyyykyyyyykyyyy",
-    ".Yyyykyyyyykyyyy",
-    "..Yyykkkkkkkyy..",
+    "......YYYY......",
+    ".....YyyyyY.....",
+    ".....YyyyyY.....",
+    "....YyyyyyyY....",
+    ".YYYYYYYYYYYYYY.",
+    ".YyyyyyyyyyyyyY.",
+    "..YkkkkkkkkkkY..",
+    "...ykkkkkkkky...",
+    "...ykccyycckY...",
+    "...ykccyycckY...",
+    "...yyykkkkyyy...",
+    "....yyykkyyy....",
     "..Yyyyyyyyyyyy..",
+    ".Yyyyyyyyyyyyyy.",
+    ".Yykyyykyyyykyy.",
+    "Yyykyyykkyyykyyy",
+    "Yyykyyykkyyykyyy",
+    "Yyykywwwwwwykyyy",
+    "Yyykywwcccwwykyy",
+    "YyykywwcHcwwykyy",
+    "Yyykywwcccwwykyy",
+    "Yyykywwwwwwykyyy",
+    "Yyykyyyyyyyykyyy",
+    ".YYYYYYYYYYYYYY.",
   ],
-  { y: Y, Y: BY, H: BW, c: BC, k: K },
+  { y: Y, Y: BY, H: BW, w: W, c: BC, k: K },
 );

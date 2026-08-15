@@ -12,6 +12,7 @@ import {
   textWidth,
 } from "@/lib/rpg/assets";
 import { KEEP_MID, KEEP_NEAR } from "@/lib/rpg/art";
+import { rampColour, type Ramp } from "@/lib/rpg/dither";
 import { B, BC, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
 import {
   REFERENCE_HERO_BACK,
@@ -29,11 +30,13 @@ import {
   type Billboard,
   type CameraState,
 } from "@/lib/rpg/projection";
-import { drawPanel, type Blip } from "@/lib/rpg/panel";
+import { drawPanel } from "@/lib/rpg/panel";
 import { collectFaces } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import {
   DEAD_WOOD_X,
+  HERMITAGE_BOXES,
+  HERMITAGE_POS,
   KEEP_BOXES,
   KEEP_GATE_Y,
   KEEP_POS,
@@ -60,6 +63,9 @@ function wrapAngle(a: number): number {
 // The opening view mirrors the reference frame: moon over the western stones,
 // wyrm to the left, and the keep straight up the leyline.
 const MOON_AZIMUTH = -0.72;
+
+/** Night air thickening toward the horizon. Two steps is all it needs. */
+const SKY_RAMP: Ramp = [K, B];
 
 /**
  * Height of a range of hills above the horizon at an azimuth, in pixels.
@@ -91,6 +97,18 @@ function ridgeAt(wx: number, range: number): number {
 function drawSky(s: Screen, yaw: number, dead: boolean): void {
   const scroll = Math.round(yaw * SKY_PX_PER_RAD);
   const skyline = dead ? W : G;
+  // A black sky is still a graded sky: a thin dither of blue into black low
+  // down is what stops the upper frame reading as a void. It has to stay
+  // faint — much past a fifth coverage it stops being air and becomes a
+  // painted band competing with the horizon. It goes first, so the stars and
+  // the copse sit on top of it rather than being swallowed.
+  const glowTop = HORIZON - 18;
+  for (let y = glowTop; y < HORIZON; y++) {
+    const level = ((y - glowTop) / 18) * 0.2;
+    for (let x = 0; x < SCREEN_W; x++) {
+      if (rampColour(SKY_RAMP, level, x, y) !== K) s.px(x, y, B);
+    }
+  }
   // The land itself, standing between the stars and the moor: a far range
   // and a nearer one. Hills on a black sky are not painted, they are the
   // absence of stars, so their profile is worked out first and everything
@@ -146,10 +164,14 @@ function drawSky(s: Screen, yaw: number, dead: boolean): void {
     }
   }
   // The near range in front of it, unlit: a black mass that eats the far
-  // slope. Its crest goes on last of all, after the haze — see drawCrests.
+  // slope, with one bright edge where the moon catches its top. It belongs
+  // here in the sky pass, behind everything standing on the ground — drawn
+  // after the billboards it lays a dashed white rule across the treetops.
   for (let x = 0; x < SCREEN_W; x++) {
+    const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
     const crest = HORIZON - 1 - Math.round(near[x]);
     for (let y = crest; y < HORIZON; y++) s.px(x, y, K);
+    if (((wx >> 1) & 1) === 0 || hash(wx, 407) < 500) s.px(x, crest, dead ? W : BW);
   }
   // A distant copse made from individual trunks and branches. It shares the
   // sky's azimuth, so it turns continuously instead of sliding as a pasted
@@ -218,98 +240,29 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
     // Raising the eye pushes the same screen row further out across the
     // moor — the whole trick behind the view from the tower top.
     const z = (eyeY * FOCAL) / depth;
-    // Distance dither: detail thins as the world recedes into the dark.
-    const fade = z > 2200 ? 3 : z > 1200 ? 2 : z > 650 ? 1 : 0;
+    // Distance falloff: the ground is shaded, so the whole field simply gets
+    // darker with range and the dither thins itself out. The curve has to be
+    // gentle in z — perspective crushes the far half of the world into a few
+    // scanlines, and a linear falloff spends the entire fade in about four of
+    // them, which puts a hard edge back on the horizon.
+    const far = 1 - Math.min(1, (z / 2400) ** 0.55);
     const footprint = z / FOCAL;
     const rowBase = sy * SCREEN_W;
     for (let sx = 0; sx < SCREEN_W; sx++) {
       const l = ((sx - 128) * z) / FOCAL;
       const wx = cx + sin * z + cos * l;
       const wy = cy + cos * z - sin * l;
-      const colour = groundColour(wx, wy, footprint, t);
+      const colour = groundColour(wx, wy, footprint, t, sx, sy, far);
       if (colour === K) continue;
       // Leyline light never fades with distance and skips the clash pass.
       if (colour === BC || colour === C) {
         ley.push(rowBase + sx, colour);
         continue;
       }
-      if (fade === 1 && (sx + sy) % 2 !== 0) continue;
-      if (fade === 2 && ((sx & 3) !== 0 || (sy & 1) !== 0)) continue;
-      if (fade === 3 && (colour === G || (sx & 7) !== 0)) continue;
       s.fb[rowBase + sx] = colour;
     }
   }
   return ley;
-}
-
-/**
- * Distance haze over the far ground: ink taken AWAY toward the horizon.
- *
- * The moor never had a depth cue — a stone at eight hundred units was drawn
- * in the same white at the same weight as one at eighty, so everything far
- * away collected into a single band of noise along the skyline, and no
- * amount of redrawing the individual sprites could fix it.
- *
- * The instinct is to lay pale mist over the far field, and on paper that is
- * what you would do. On a black screen it is exactly wrong: the ground is
- * ink on unlit glass, so adding white brings the distance FORWARD. Things
- * recede here by being eaten, until the far moor is more black than moor.
- *
- * Runs after the billboards, so distant stones thin out with the ground they
- * stand on. The leyline is exempt: it is the one thing on the moor that is
- * light rather than paint, and it should still reach the horizon.
- */
-function drawHaze(s: Screen, cam: CameraState, t: number): void {
-  const { fx, fy } = forward(cam.yaw);
-  const { ex, ey } = eyeOf(cam);
-  const eyeY = eyeHeight(cam);
-  const drift = t * 6;
-  // Starts ABOVE the horizon row. Billboards stand on the ground but reach
-  // up past it, so a haze that began at the horizon left the top half of
-  // every distant stone untouched — a picket of bright white heads along the
-  // skyline with cleared moor underneath, which was worse than no haze.
-  for (let sy = HORIZON - 12; sy < HORIZON + 30; sy++) {
-    const depth = Math.max(0.5, sy - HORIZON);
-    const z = (eyeY * FOCAL) / depth;
-    const above = sy < HORIZON;
-    const band = above ? 1 : 1 - (sy - HORIZON) / 30;
-    // Gentler above the horizon than below it. Anything reaching over the
-    // skyline is tall, and tall things — the keep, a trilithon — are what
-    // the player is navigating by. Thinning them reads as distance; eating
-    // them outright loses the destination.
-    const eaten = above ? 330 : band ** 1.6 * 980;
-    if (eaten < 8) continue;
-    const rowBase = sy * SCREEN_W;
-    for (let sx = 0; sx < SCREEN_W; sx++) {
-      const colour = s.fb[rowBase + sx];
-      if (colour === K || colour === C || colour === BC) continue;
-      const l = ((sx - 128) * z) / FOCAL;
-      const wx = ex + fx * z + fy * l + drift;
-      const wy = ey + fy * z - fx * l;
-      // Banks of thicker air, so the haze has shape instead of being an even
-      // wash — some hollows swallow their stones, some ridges keep theirs.
-      const bank = hash(Math.floor(wx / 110), Math.floor(wy / 300));
-      const local = eaten * (0.55 + (bank / 1000) * 0.9);
-      if (hash(Math.floor(wx / 2), Math.floor(wy / 7)) < local) {
-        s.fb[rowBase + sx] = K;
-      }
-    }
-  }
-}
-
-/**
- * The near skyline, laid over the haze that has just eaten everything else
- * in that band. The ridge is the one edge in the picture that has to stay
- * hard: it is what tells the eye where the land stops and the sky starts,
- * and a crest chewed by its own atmosphere reads as a smudge.
- */
-function drawCrests(s: Screen, yaw: number, dead: boolean): void {
-  const scroll = Math.round(yaw * SKY_PX_PER_RAD);
-  for (let x = 0; x < SCREEN_W; x++) {
-    const wx = (((x + scroll) % SKY_PERIOD) + SKY_PERIOD) % SKY_PERIOD;
-    const crest = HORIZON - 1 - Math.round(ridgeAt(wx, 1));
-    if (((wx >> 1) & 1) === 0 || hash(wx, 407) < 500) s.px(x, crest, dead ? W : BW);
-  }
 }
 
 // --------------------------------------------------------------------- hero
@@ -467,18 +420,14 @@ export interface HudState {
   /** 0..1. */
   lifeforce: number;
   gems: [boolean, boolean, boolean];
-  /** Where she is, named. */
+  /** Where she is, named. Captions the area map. */
   place: string;
   /** What she is carrying. */
   carried: readonly string[];
-  /** Everything alive near enough for the radar. */
-  blips: readonly Blip[];
-  /** Set indoors: the radar draws this room plan instead of a compass. */
-  plan?: { rows: readonly string[]; cell: number };
 }
 
-/** The control panel lives in its own module; this passes it the camera. */
-function drawHud(s: Screen, hud: HudState, cam: CameraState): void {
+/** The control panel lives in its own module. */
+function drawHud(s: Screen, hud: HudState): void {
   drawPanel(s, {
     spellName: hud.spellName,
     runes: RUNES,
@@ -486,12 +435,6 @@ function drawHud(s: Screen, hud: HudState, cam: CameraState): void {
     lifeforce: hud.lifeforce,
     gems: hud.gems,
     carried: hud.carried,
-    place: hud.place,
-    x: cam.x,
-    y: cam.y,
-    yaw: cam.yaw,
-    blips: hud.blips,
-    plan: hud.plan,
   });
 }
 
@@ -564,12 +507,11 @@ export function drawOverlay(
   hud: HudState,
   t: number,
   overlay: OverlayState | undefined,
-  cam: CameraState,
 ): void {
   drawHero(s, t);
   if (overlay?.dialogue) drawDialogue(s, overlay.dialogue, t);
   else if (overlay?.prompt) drawPrompt(s, overlay.prompt);
-  drawHud(s, hud, cam);
+  drawHud(s, hud);
 }
 
 /**
@@ -631,6 +573,10 @@ export function renderFrame(
   );
   const keepDistance = Math.hypot(cam.x - KEEP_POS.x, cam.y - KEEP_GATE_Y);
   const villageDistance = Math.hypot(cam.x - VILLAGE_POS.x, cam.y - VILLAGE_POS.y);
+  const hermitageDistance = Math.hypot(
+    cam.x - HERMITAGE_POS.x,
+    cam.y - HERMITAGE_POS.y,
+  );
   const distantKeep: Billboard[] =
     !omit?.has("keep") && keepDistance > 800
       ? [{
@@ -649,12 +595,11 @@ export function renderFrame(
   const jobs = [
     ...(omit?.has("keep") || keepDistance > 800 ? [] : collectFaces(cam, KEEP_BOXES)),
     ...(villageDistance > 850 ? [] : collectFaces(cam, VILLAGE_BOXES)),
+    ...(hermitageDistance > 700 ? [] : collectFaces(cam, HERMITAGE_BOXES)),
     ...collectBillboards(cam, [...distantKeep, ...features, ...entities], t),
   ];
   jobs.sort((a, b) => b.z - a.z);
   for (const j of jobs) j.paint(s);
-  drawHaze(s, cam, t);
-  drawCrests(s, cam.yaw, cam.x < DEAD_WOOD_X);
   if (lightning && t < lightning.until) drawLightning(s, cam, t, lightning);
-  drawOverlay(s, hud, t, overlay, cam);
+  drawOverlay(s, hud, t, overlay);
 }
