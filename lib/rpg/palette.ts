@@ -7,10 +7,16 @@
 // LOOK.earth is on (see look.ts). With the flag off nothing emits it and the
 // strict 15-colour fiction holds.
 //
-// A *table* is the sixteen RGB triples those indices resolve to. The art never
+// A *table* is the RGB triples those indices resolve to. The art never
 // knows which table is in force, so a region can be repainted wholesale without
 // touching a single sprite: see regions.ts for which part of the world gets
 // which table.
+//
+// Above the ULA rows sit the ULAplus rows: value ramps that terrain, sky,
+// masonry and distance shading walk, and which sprite art never names
+// directly. A real ULAplus part gives 64 colours; this table uses 63 of them,
+// and every one is derived from the sixteen a table already declares, so a
+// new region palette is still authored as sixteen colours and its weather.
 
 export const K = 0; // black
 export const B = 1; // blue
@@ -29,37 +35,144 @@ export const BC = 13; // bright cyan
 export const BY = 14; // bright yellow
 export const BW = 15; // bright white
 
-// The ULAplus rows (the `ramps` look): terrain-and-sky-only value ramps.
-// Sprites and HUD never touch them, so the 15-colour art rules still hold
-// for everything that moves.
-/** Ground ramp, dark..lit = RAMP_G0..RAMP_G0+3. */
+// ------------------------------------------------------------ ULAplus rows
+//
+// Each ramp runs dark to light and is *interleaved*: the shades a table
+// authors land on the even entries and the engine fills the odd ones with
+// their midpoints. So the shipped four-step ladders survive exactly — they
+// are the even subset — and every new shade sits between two old ones rather
+// than displacing them. That is what makes the old look and the shaded look
+// A/B-able: same value curve, sampled twice as finely.
+//
+// Sprites and the HUD still never name these rows, so the 15-colour art rules
+// hold for everything that moves; the ramps are lighting, not paint.
+
+/** Ground: 11 steps, deep soil to lit grass. Evens are the authored soil rows, then G, BG. */
 export const RAMP_G0 = 16;
-/** Sky ramp, zenith..horizon = RAMP_S0..RAMP_S0+3. */
-export const RAMP_S0 = 20;
+export const RAMP_G_N = 11;
+/** Sky: 7 steps, zenith to horizon. Evens are the authored sky rows. */
+export const RAMP_S0 = 27;
+export const RAMP_S_N = 7;
+/** Stone: 7 steps, unlit masonry to a moonlit face. Evens end at W, BW. */
+export const RAMP_K0 = 34;
+export const RAMP_K_N = 7;
+/** Leaf: 7 steps, canopy shadow to lit foliage. Evens end at G, BG. */
+export const RAMP_F0 = 41;
+export const RAMP_F_N = 7;
+/** Glow: 7 steps, deep water to ley-light. Evens end at C, BC. */
+export const RAMP_L0 = 48;
+export const RAMP_L_N = 7;
+/**
+ * One dim shade per normal ULA hue, at `DIM0 + (colour & 7)`. Red, blue,
+ * magenta and yellow have no ramp of their own; without a rung below them a
+ * distant thing painted in one of them cannot recede at all.
+ */
+export const DIM0 = 55;
+
+/** Total entries in a table. */
+export const PALETTE_N = 63;
 
 /** Transparent marker for sprite data (never a drawable colour). */
 export const T = 255;
 
-export type PaletteTable = ReadonlyArray<readonly [number, number, number]>;
+export type Rgb = readonly [number, number, number];
+export type PaletteTable = ReadonlyArray<Rgb>;
+
+function rgbOf(hex: string): Rgb {
+  return [
+    parseInt(hex.slice(0, 2), 16),
+    parseInt(hex.slice(2, 4), 16),
+    parseInt(hex.slice(4, 6), 16),
+  ] as const;
+}
+
+/**
+ * Blend two colours. Straight sRGB, matching how regions.ts crossfades two
+ * tables: a ramp built one way and blended another drifts off its own curve
+ * halfway between regions, which is exactly where nobody is looking for a
+ * bug.
+ */
+function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ] as const;
+}
+
+/**
+ * `anchors` laid on the even entries of a `2n-1`-step ramp, odd entries being
+ * the midpoint of their neighbours. Interleaving rather than resampling is
+ * what keeps an authored ladder intact inside the finer one.
+ */
+function interleave(anchors: readonly Rgb[]): Rgb[] {
+  const out: Rgb[] = [anchors[0]];
+  for (let i = 1; i < anchors.length; i++) {
+    out.push(mixRgb(anchors[i - 1], anchors[i], 0.5), anchors[i]);
+  }
+  return out;
+}
+
+/**
+ * A ramp from the table's own black up to `top`, through a mid anchor, so
+ * every family (stone, leaf, ley-light) gets its dark rungs for free from the
+ * one colour that names it. The two fractions are where the authored anchors
+ * sit: low enough that the bottom of the ramp is nearly out, far enough apart
+ * that the steps between them read as separate tones rather than as noise.
+ */
+function familyRamp(black: Rgb, mid: Rgb, top: Rgb): Rgb[] {
+  return interleave([
+    mixRgb(black, mid, 0.13),
+    mixRgb(black, mid, 0.42),
+    mid,
+    top,
+  ]);
+}
 
 /**
  * Twenty-four `rrggbb` words in ULA index order — the normal row on the
  * first line, the bright row on the second, so a table reads like the
- * hardware — plus a third, ULAplus-fiction line: the ground ramp (16..19,
- * dark to lit) and the sky ramp (20..23, zenith to horizon), used only when
- * LOOK.ramps is on. Index 8 is each table's earth tone: the colour of bare
- * ground when LOOK.earth is on, darker than every normal colour so black
- * stays black for water, sky and sprite work.
+ * hardware — plus a third line of authored ULAplus anchors: four soil tones
+ * (dark to light) and four sky tones (zenith to horizon). Index 8 is the
+ * table's earth tone: the colour of bare ground when LOOK.earth is on,
+ * darker than every normal colour so black stays black for water, sky and
+ * sprite work.
+ *
+ * Everything above index 15 is derived from those words: the ramps are the
+ * authored anchors interleaved with their own midpoints, and the dim row is
+ * each normal hue taken most of the way out. A table therefore still says
+ * only what a Spectrum artist would have chosen — sixteen colours and the
+ * weather — and the sixty-three the renderer sees follow from it.
  */
 function table(...hex: string[]): PaletteTable {
-  return hex.map(
-    (h) =>
-      [
-        parseInt(h.slice(0, 2), 16),
-        parseInt(h.slice(2, 4), 16),
-        parseInt(h.slice(4, 6), 16),
-      ] as const,
-  );
+  const ula = hex.slice(0, 16).map(rgbOf);
+  const soil = hex.slice(16, 20).map(rgbOf);
+  const sky = hex.slice(20, 24).map(rgbOf);
+  const black = ula[K];
+  const out: Rgb[] = [
+    ...ula,
+    // Ground climbs out of the soil rows and on into the living greens, so
+    // one ramp carries bare earth and turf without a seam where they meet.
+    // The soil rows interleave with their own midpoints; the long haul from
+    // the top soil to full green gets two bridging tones instead, placed by
+    // eye rather than by halving — a midpoint between dark olive and a
+    // saturated green is most of the way to the green already, so halving
+    // that gap spends a rung on nothing and leaves the climb as steep as it
+    // was.
+    ...interleave(soil),
+    ...[0.28, 0.6].map((t) => mixRgb(soil[3], ula[G], t)),
+    ula[G],
+    ula[BG],
+    ...interleave(sky),
+    ...familyRamp(black, ula[W], ula[BW]),
+    ...familyRamp(black, ula[G], ula[BG]),
+    ...familyRamp(black, ula[C], ula[BC]),
+    ...ula.slice(0, 8).map((c) => mixRgb(black, c, 0.38)),
+  ];
+  if (out.length !== PALETTE_N) {
+    throw new Error(`palette table is ${out.length} entries, expected ${PALETTE_N}`);
+  }
+  return out;
 }
 
 /** Pure primaries at 0xD8, brights at 0xFF: the emulator default. */
@@ -106,3 +219,87 @@ export const EMBER_DUSK = table(
 
 /** Palette index -> [r, g, b]. The table in force when no region says otherwise. */
 export const PALETTE_RGB: PaletteTable = ULA_STANDARD;
+
+// ------------------------------------------------------------------ dimming
+//
+// One step darker, in index space rather than in RGB. It has to be index
+// space: regions.ts crossfades two tables into a scratch buffer every frame,
+// so a mapping computed from RGB would be recomputed per frame or, worse,
+// cached and stale. Every table shares this layout, so the chains below hold
+// whichever weather the player is standing in.
+
+function chain(base: number, n: number, ...tail: number[]): number[] {
+  return [K, ...Array.from({ length: n }, (_, i) => base + i), ...tail];
+}
+
+/**
+ * The ladders a colour walks down as it recedes. Each is dark to light, and
+ * `dimmer` reads them as "the rung below". The ULA colours are spliced into
+ * their own family's ladder — a distant white wall steps down through stone,
+ * not through some nearest-RGB accident.
+ */
+const LADDERS: readonly number[][] = [
+  // Stone, leaf and ley-light. A family ramp ends on its own copies of the
+  // ULA pair that names it, so those two rungs are skipped and the ULA
+  // colours spliced in instead: without that the chain spends two of its
+  // steps moving between colours that are the same colour, and a distant
+  // wall dims by nothing at all.
+  [...chain(RAMP_K0, RAMP_K_N - 3), W, RAMP_K0 + RAMP_K_N - 2, BW],
+  [...chain(RAMP_F0, RAMP_F_N - 3), G, RAMP_F0 + RAMP_F_N - 2, BG],
+  [...chain(RAMP_L0, RAMP_L_N - 3), C, RAMP_L0 + RAMP_L_N - 2, BC],
+  chain(RAMP_G0, RAMP_G_N),
+  chain(RAMP_S0, RAMP_S_N),
+  // The four hues with no ramp of their own get the one dim rung below them.
+  ...[B, R, M, Y].map((h) => [K, DIM0 + h, h, h + 8]),
+];
+
+/** How many steps of dimming are worth precomputing (see `dimmer`). */
+const DIM_STEPS = 4;
+
+const DIM_TABLES: Uint8Array[] = (() => {
+  const one = new Uint8Array(PALETTE_N);
+  for (let i = 0; i < PALETTE_N; i++) one[i] = i;
+  for (const ladder of LADDERS) {
+    for (let i = 1; i < ladder.length; i++) one[ladder[i]] = ladder[i - 1];
+  }
+  one[K] = K;
+  const tables = [one];
+  for (let step = 1; step < DIM_STEPS; step++) {
+    const prev = tables[step - 1];
+    const next = new Uint8Array(PALETTE_N);
+    for (let i = 0; i < PALETTE_N; i++) next[i] = one[prev[i]];
+    tables.push(next);
+  }
+  return tables;
+})();
+
+/**
+ * The colour `steps` rungs further from the light — how a thing recedes when
+ * there are shades to recede through. Distance used to be spent by dithering
+ * a sprite into holes; a ladder spends it in value instead, which is what the
+ * eye actually reads as air.
+ */
+export function dimmed(colour: number, steps: number): number {
+  if (steps <= 0 || colour >= PALETTE_N) return colour;
+  return DIM_TABLES[Math.min(DIM_STEPS, steps) - 1][colour];
+}
+
+/**
+ * True for the colours the ground may emit as *light* rather than as paint:
+ * the two ULA cyans and the ley-light ramp below them. The renderer holds
+ * these back and composites them after the clash pass, or a two-pixel core
+ * loses its cell's vote to the turf around it and the leyline goes out.
+ */
+export function isLeyLight(colour: number): boolean {
+  return (
+    colour === C ||
+    colour === BC ||
+    (colour >= RAMP_L0 && colour < RAMP_L0 + RAMP_L_N)
+  );
+}
+
+/** The whole lookup for one dimming step, for inner loops. */
+export function dimTable(steps: number): Uint8Array | null {
+  if (steps <= 0) return null;
+  return DIM_TABLES[Math.min(DIM_STEPS, steps) - 1];
+}

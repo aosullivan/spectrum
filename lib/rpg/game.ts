@@ -2,7 +2,7 @@
 // through the keep gate into the dark. Fixed-timestep update, render every
 // animation frame.
 
-import { DENIZENS, roam } from "@/lib/rpg/denizens";
+import { makeDenizens, roam } from "@/lib/rpg/denizens";
 import { deathBillboard, type DeathStyle } from "@/lib/rpg/death";
 import { REFERENCE_WRAITH } from "@/lib/rpg/reference-art.generated";
 import {
@@ -168,6 +168,9 @@ export class Game {
   /** How far each door has swung, 0 shut to 1 wide, by doorway id. */
   private readonly doors = new Map<string, number>();
 
+  /** This game's own flock; roam moves them, so they must not be shared. */
+  private readonly denizens = makeDenizens();
+
   private readonly wraiths: Wraith[] = [
     {
       id: "wraith-1",
@@ -228,7 +231,7 @@ export class Game {
   private shotSeed = 0;
 
   constructor() {
-    for (const d of DENIZENS) {
+    for (const d of this.denizens) {
       if (d.hostile) this.enemyEnergy.set(d.id, ENEMY_MAX_ENERGY);
     }
     for (const w of this.wraiths) this.enemyEnergy.set(w.id, ENEMY_MAX_ENERGY);
@@ -309,7 +312,7 @@ export class Game {
       w.x = w.originX + Math.sin(this.t * 0.4 + w.phase) * 46;
       w.y = w.originY + Math.cos(this.t * 0.27 + w.phase) * 30;
     }
-    roam(DENIZENS, this.t);
+    roam(this.denizens, this.t);
   }
 
   /** Keep the camera outside the wyrm while always allowing the player to escape. */
@@ -319,7 +322,7 @@ export class Game {
     toX: number,
     toY: number,
   ): { x: number; y: number } {
-    const wyrm = DENIZENS.find((d) => d.id === "wyrm");
+    const wyrm = this.denizens.find((d) => d.id === "wyrm");
     if (!wyrm) return { x: toX, y: toY };
     const radius = 66;
     const radialX = fromX - wyrm.x;
@@ -357,7 +360,7 @@ export class Game {
 
     const { fx, fy } = forward(this.cam.yaw);
     const outdoorTargets: CombatTarget[] = [
-      ...DENIZENS.filter((d) => d.hostile).map((d) => ({
+      ...this.denizens.filter((d) => d.hostile).map((d) => ({
         ...d,
         deathStyle: "corporeal" as const,
       })),
@@ -434,7 +437,7 @@ export class Game {
       ? ROOF_ACTORS
       : this.interior
         ? this.interior.actors
-        : DENIZENS.filter((d) => !this.enemyDeaths.has(d.id));
+        : this.denizens.filter((d) => !this.enemyDeaths.has(d.id));
     return actorInReach(actors, this.cam.x, this.cam.y, this.taken);
   }
 
@@ -635,7 +638,7 @@ export class Game {
     const near = (x: number, y: number) =>
       Math.abs(x - this.cam.x) <= RADAR_RANGE &&
       Math.abs(y - this.cam.y) <= RADAR_RANGE;
-    for (const d of DENIZENS) {
+    for (const d of this.denizens) {
       if (this.enemyDeaths.has(d.id) || !near(d.x, d.y)) continue;
       blips.push({ x: d.x, y: d.y, kind: d.hostile ? "foe" : "friend" });
     }
@@ -681,7 +684,7 @@ export class Game {
       cam,
       place: this.hud.place,
       marks: [
-        ...DENIZENS.filter(
+        ...this.denizens.filter(
           (d) => !this.enemyDeaths.has(d.id) && near(d.x, d.y),
         ).map((d) => ({
           x: d.x,
@@ -752,7 +755,7 @@ export class Game {
           ? (this.enemyEnergy.get(w.id) ?? ENEMY_MAX_ENERGY) / ENEMY_MAX_ENERGY
           : undefined,
       }));
-    const visibleDenizens = DENIZENS.filter((d) => !this.enemyDeaths.has(d.id)).map((d) =>
+    const visibleDenizens = this.denizens.filter((d) => !this.enemyDeaths.has(d.id)).map((d) =>
       halo(
         d.hostile && this.inZapRange(d)
           ? {

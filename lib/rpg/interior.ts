@@ -6,7 +6,9 @@
 import { NPC_SEER, NPC_SHADE } from "@/lib/rpg/bestiary";
 import { HEARTH, HEARTH_ALT, WOODPILE } from "@/lib/rpg/hermitage";
 import { EXIT_ARCH, ITEM_KEY, ITEM_TORC, TORC_FRAMES } from "@/lib/rpg/items";
-import { BC, BW, BY, C, K, W, Y } from "@/lib/rpg/palette";
+import { rampColour, type Ramp } from "@/lib/rpg/dither";
+import { LOOK } from "@/lib/rpg/look";
+import { BC, BW, BY, C, DIM0, K, W, Y, dimmed } from "@/lib/rpg/palette";
 import { BARREL, BED, TRESTLE } from "@/lib/rpg/village";
 import type { Actor } from "@/lib/rpg/interact";
 import {
@@ -629,9 +631,20 @@ function drawFloor(s: Screen, interior: Interior, cam: CameraState): void {
       const lit = litness(interior, wx, wy);
       // Firelight only fills the dark between the flags — the slab joints
       // stay white, so the floor keeps its drawing under the glow.
-      if (colour === K && lit > 0.05 && toned(sx, sy, lit * 0.72)) {
-        s.fb[sy * SCREEN_W + sx] = lit > 0.55 ? BY : Y;
-        continue;
+      if (colour === K && lit > 0.05) {
+        if (LOOK.shades) {
+          // Firelight as a ramp: the dither that used to ration two yellows
+          // now falls between neighbouring rungs, so the pool has an edge
+          // that fades instead of a line where the second yellow stops.
+          const flame = rampColour(FIRE_RAMP, Math.min(0.999, lit * 0.9), sx, sy);
+          if (flame !== K) {
+            s.fb[sy * SCREEN_W + sx] = flame;
+            continue;
+          }
+        } else if (toned(sx, sy, lit * 0.72)) {
+          s.fb[sy * SCREEN_W + sx] = lit > 0.55 ? BY : Y;
+          continue;
+        }
       }
       if (colour === K) continue;
       if (faint && colour === W && (sx + sy) % 2 !== 0) continue;
@@ -727,6 +740,13 @@ function castColumns(interior: Interior, cam: CameraState): (Hit | null)[] {
 }
 
 /** World units per masonry course: the stone's own scale, and the room's. */
+/**
+ * Firelight, out to in: black, the dim amber rung, then the two ULA yellows.
+ * A brazier is the only warm light in the game, and two yellows dithered
+ * against black could say "lit" but never "how far".
+ */
+const FIRE_RAMP: Ramp = [K, DIM0 + Y, Y, BY];
+
 const COURSE = 19;
 
 /** Blocks lie longer than they are tall, or the face reads as a net. */
@@ -810,7 +830,17 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
     // on the one distinction worth having: near faces come forward, far ones
     // sit back. Faces square to the plan's two axes take different ones so
     // that a corner reads as a corner rather than as a line on a flat hole.
-    const line = mid.z < 200 && face.side === 0 ? BW : W;
+    //
+    // With the stone ramp under it there are more than two, so the same
+    // distinction is drawn in tone rather than rationed: the far end of a
+    // hall goes down the ladder instead of staying at full white, and the
+    // room gets the depth the moor outside has. The wall itself stays black
+    // — this is line work with air in it, not a filled interior.
+    const line = LOOK.shades
+      ? dimmed(face.side === 0 ? BW : W, mid.z > 300 ? 2 : mid.z > 150 ? 1 : 0)
+      : mid.z < 200 && face.side === 0
+        ? BW
+        : W;
 
     for (let cx = x; cx <= end; cx++) {
       const col = hits[cx];
@@ -829,6 +859,12 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
       // Studs are set out along the wall only, so the whole test is a
       // horizontal one and it can be lifted clear of the per-row loop.
       const stud = ((along % STUD) + STUD) % STUD;
+      // Courses, joints and grain recede with the face they belong to, or a
+      // far wall keeps hairlines at full white while its outline dims and
+      // the two come apart. Studwork takes the same tone as coursing does.
+      const stone = LOOK.shades
+        ? dimmed(W, col.z > 300 ? 2 : col.z > 150 ? 1 : 0)
+        : W;
       for (let y = y0; y <= y1; y++) {
         const i = y * SCREEN_W + cx;
         if (y === y0 || y === y1 || seam) {
@@ -846,12 +882,12 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
           // and crucially the spacing is the height of a person rather than
           // of a quarried block, so the room stays the size it really is.
           if (stud < grain || h < 3 || h > wallTop - 4) {
-            s.fb[i] = W;
+            s.fb[i] = stone;
             continue;
           }
         } else if (masonry) {
           if (band !== Math.floor(below / COURSE)) {
-            s.fb[i] = W;
+            s.fb[i] = stone;
             continue;
           }
           // Running bond: every other course starts half a block along.
@@ -860,20 +896,33 @@ function drawWalls(s: Screen, interior: Interior, cam: CameraState): Float32Arra
           if (across < grain) {
             // Dashed, so the joints between blocks sit behind the courses
             // rather than turning the face into a grid of equal weight.
-            s.fb[i] = (y & 1) === 0 ? W : K;
+            s.fb[i] = (y & 1) === 0 ? stone : K;
             continue;
           }
         }
         // Firelight pools low on the wall and dies out going up, because a
         // brazier stands on the floor.
         const glow = lit * Math.max(0, 1 - h / FIRE_REACH);
-        if (glow > 0.08 && toned(cx, y, glow * FIRE_ON_STONE)) {
-          s.fb[i] = glow > 0.55 ? BY : Y;
-          continue;
+        if (glow > 0.08) {
+          if (LOOK.shades) {
+            const flame = rampColour(
+              FIRE_RAMP,
+              Math.min(0.999, glow * FIRE_ON_STONE * 1.25),
+              cx,
+              y,
+            );
+            if (flame !== K) {
+              s.fb[i] = flame;
+              continue;
+            }
+          } else if (toned(cx, y, glow * FIRE_ON_STONE)) {
+            s.fb[i] = glow > 0.55 ? BY : Y;
+            continue;
+          }
         }
         // And the grain of the stone itself, near enough to be seen.
         s.fb[i] =
-          masonry && hash(Math.floor(along), Math.floor(h)) < 34 ? W : K;
+          masonry && hash(Math.floor(along), Math.floor(h)) < 34 ? stone : K;
       }
     }
     x = end + 1;

@@ -50,7 +50,7 @@ export const DRAGON_HOME = { x: -340, y: 280 };
 /** The elves keep to a grove east of the line. */
 const GROVE = { x: 380, y: 150 };
 
-export const DENIZENS: Denizen[] = [
+const DENIZENS: readonly Denizen[] = [
   denizen({
     id: "wyrm",
     originX: DRAGON_HOME.x,
@@ -312,6 +312,18 @@ export const DENIZENS: Denizen[] = [
     }),
   ),
 ];
+
+/**
+ * The moor's population, built fresh for one Game. `roam` writes positions
+ * into the denizen objects, so handing every Game the same module-level
+ * array would let one session's clock leak into the next one's opening
+ * frame — new games in the same process (remounts, the dev look-shot
+ * route) rendered denizens wherever the last game left them. Sprites and
+ * interactions are shared by reference; they are never written to.
+ */
+export function makeDenizens(): Denizen[] {
+  return DENIZENS.map((d) => ({ ...d }));
+}
 
 /** Walk every denizen along its orbit. Pure function of time. */
 export function roam(denizens: readonly Denizen[], t: number): void {
