@@ -107,19 +107,23 @@ const SOFTEN_REACH = 0.96;
 const LEAF_AT = 3;
 
 /**
- * Magnification past which it is thinned no longer. The gaps are a texture
- * laid inside a shape, and they only work while the shape is still on screen
- * with them. Past about five times life size the frame sits wholly inside the
- * canopy's flat interior: the silhouette and the black gaps carved into the
- * art are all outside the viewport, the stipple stops decorating anything and
- * becomes the entire image, and a crown you should be standing under reads as
- * a field of grit. The art's own carved holes are branch-sized by then and do
- * the job the stipple was doing at four.
+ * Fraction of the dither matrix that becomes gaps in a thinned canopy — one
+ * value in sixteen here, so a sixteenth of the flat field is punched out.
+ *
+ * It was a quarter, set when the canopies were near-solid fields of leaf
+ * characters and the stipple was the only thing letting sky through them.
+ * The woods were redrawn since and the art carries its own gaps now: the oak
+ * is 27.9% holes through the middle against 18.9% then, with dark clusters
+ * carved into it besides. A further quarter on top of that stopped reading as
+ * light through leaves and started reading as a wash — walk under the elder
+ * oak and the crown went pale and blotchy, the weakest thing on screen, which
+ * is the very fault the thinning was added to cure. A sixteenth still breaks
+ * the slab without bleaching it.
+ *
+ * Tied to the art, not to the renderer: redraw the canopies denser and this
+ * wants to go back up.
  */
-const LEAF_UNTIL = 5;
-
-/** Fraction of the dither matrix that becomes gaps in a thinned canopy. */
-const LEAF_GAP = 0.24;
+const LEAF_GAP = 0.42;
 
 /**
  * True where `spr` runs on at (sx, sy) — the pixel has at least two of its
@@ -267,11 +271,7 @@ export class Screen {
     // ratio each destination pixel takes a vote of the block it covers, and
     // thin work thickens into a silhouette instead of dissolving into speckle.
     const shrunk = spr.w > w * 1.3 && spr.h > h * 1.3;
-    const thin =
-      soften &&
-      spr.canopy === true &&
-      w >= spr.w * LEAF_AT &&
-      w < spr.w * LEAF_UNTIL;
+    const thin = soften && spr.canopy === true && w >= spr.w * LEAF_AT;
     const stepX = spr.w / w;
     const stepY = spr.h / h;
     // Clipped to the screen rather than trusting `px` to drop what falls off
