@@ -12,8 +12,9 @@ import {
 } from "@/lib/rpg/interact";
 import {
   CELL,
-  KEEP_INTERIOR,
   ROOF_HEIGHT,
+  SITES,
+  SITE_NAMES,
   TOWER_INTERIOR,
   entryOf,
   floorHeightAt,
@@ -53,7 +54,7 @@ import {
 } from "@/lib/rpg/areamap";
 import {
   CIRCLE_POS,
-  GATE,
+  DOORWAYS,
   GROVE_POS,
   HENGE_POS,
   HERMITAGE_POS,
@@ -61,6 +62,7 @@ import {
   VILLAGE_POS,
   DEAD_WOOD_X,
   resolveMove,
+  type Doorway,
 } from "@/lib/rpg/world";
 
 export interface InputState {
@@ -133,11 +135,20 @@ interface DeathState {
   scope: string;
 }
 
-/** Where the player stands when stepping back out of a site. */
-interface Doorstep {
-  x: number;
-  y: number;
-  yaw: number;
+/** Seconds for a leaf to swing wide, and to fall shut again. */
+const DOOR_OPEN_TIME = 0.42;
+const DOOR_SHUT_TIME = 0.7;
+/** How far a door must have swung before she will step through it. */
+const DOOR_CLEAR = 0.72;
+
+/**
+ * One storey of the way back: where she was standing, and in what. A null
+ * interior is the open world, so the same stack unwinds roof to stair, stair
+ * to hall, hall to the moor, and common room to village square.
+ */
+interface Return {
+  interior: Interior | null;
+  cam: CameraState;
 }
 
 export class Game {
@@ -148,11 +159,14 @@ export class Game {
   private interior: Interior | null = null;
   /** True when standing on the leads at the top of the keep. */
   private onRoof = false;
-  /** Where to put her back when she descends a storey. */
-  private innerReturn: CameraState | null = null;
-  private doorstep: Doorstep = { x: 0, y: 0, yaw: 0 };
+  /** Where to put her back, innermost last. */
+  private readonly returns: Return[] = [];
+  /** Where she last came outdoors, so a building takes its ground's palette. */
+  private doorstep: CameraState = { x: 0, y: 0, yaw: 0 };
   /** Blocks re-triggering the doorway you are standing in. */
   private transitionLock = false;
+  /** How far each door has swung, 0 shut to 1 wide, by doorway id. */
+  private readonly doors = new Map<string, number>();
 
   private readonly wraiths: Wraith[] = [
     {
@@ -286,6 +300,7 @@ export class Game {
         ? floorHeightAt(this.interior, this.cam.y)
         : 0;
 
+    this.swingDoors(dt);
     this.checkDoorways();
     if (fired) this.tryFire();
     if (pressed) this.tryInteract();
@@ -446,13 +461,15 @@ export class Game {
       this.notice = { text: what.onTake, until: this.t + 3.5 };
     } else if (what.kind === "enter") {
       // Remember the doorway so "go back down" returns you to it.
-      this.innerReturn = { ...this.cam };
-      this.interior = TOWER_INTERIOR;
-      this.cam = entryOf(TOWER_INTERIOR);
+      const site = SITES[what.site];
+      if (!site) return;
+      this.returns.push({ interior: this.interior, cam: { ...this.cam } });
+      this.interior = site;
+      this.cam = entryOf(site);
       this.speed = 0;
       this.transitionLock = true;
     } else if (what.kind === "roof") {
-      this.innerReturn = { ...this.cam };
+      this.returns.push({ interior: this.interior, cam: { ...this.cam } });
       this.onRoof = true;
       this.cam = roofEntry();
       this.speed = 0;
@@ -461,25 +478,18 @@ export class Game {
     }
   }
 
-  /** Back down one storey: roof to stair, stair to hall, hall to the moor. */
+  /** Back one storey: roof to stair, stair to hall, hall or room to outdoors. */
   private leaveInterior(): void {
+    const back = this.returns.pop();
     if (this.onRoof) {
       this.onRoof = false;
-      this.cam = this.innerReturn ?? entryOf(TOWER_INTERIOR);
-      this.innerReturn = null;
+      this.interior = back?.interior ?? TOWER_INTERIOR;
+      this.cam = { ...(back?.cam ?? entryOf(TOWER_INTERIOR)) };
       this.speed = 0;
       return;
     }
-    if (this.interior === TOWER_INTERIOR) {
-      this.interior = KEEP_INTERIOR;
-      this.cam = this.innerReturn ?? entryOf(KEEP_INTERIOR);
-      this.innerReturn = null;
-      this.speed = 0;
-      this.transitionLock = true;
-      return;
-    }
-    this.interior = null;
-    this.cam = { ...this.doorstep };
+    this.interior = back?.interior ?? null;
+    this.cam = { ...(back?.cam ?? this.doorstep) };
     this.speed = 0;
     this.transitionLock = true;
   }
@@ -512,52 +522,83 @@ export class Game {
     return { prompt: actor ? `E   ${actor.label}` : null, dialogue: null };
   }
 
-  /** Glide into the gate to enter; drift back over the threshold to leave. */
+  /**
+   * True when the mage is standing in the mouth of a doorway, within `depth`
+   * of its face. A bounded box, not a half-plane: the keep's old test was
+   * "anywhere north of this line", which swallowed anyone who walked round to
+   * the back of it.
+   */
+  private atDoor(door: Doorway, depth: number): boolean {
+    return (
+      Math.abs(this.cam.x - door.x) < door.halfW &&
+      this.cam.y > door.y - depth &&
+      this.cam.y < door.y + 6
+    );
+  }
+
+  /**
+   * Swing every door in the world toward where it ought to be.
+   *
+   * A door opens because she walked into it — there is no key for it — and
+   * falls shut on its own once she is past or away. Shutting is the slower of
+   * the two so that stepping back out onto a doorstep leaves the leaf standing
+   * open behind you for a moment before it closes.
+   *
+   * Every door is shut while she is indoors, which is also what closes the one
+   * she just came through: cross a threshold and it swings to behind you.
+   */
+  private swingDoors(dt: number): void {
+    const outside = !this.interior && !this.onRoof;
+    for (const door of DOORWAYS) {
+      const open = this.doors.get(door.id) ?? 0;
+      const wants = outside && this.atDoor(door, door.noticeAt);
+      const next = wants
+        ? Math.min(1, open + dt / DOOR_OPEN_TIME)
+        : Math.max(0, open - dt / DOOR_SHUT_TIME);
+      if (next <= 0) this.doors.delete(door.id);
+      else this.doors.set(door.id, next);
+    }
+  }
+
+  /** Walk into an open door to cross; press the key at the arch to leave. */
   private checkDoorways(): void {
-    if (this.interior) {
-      // Leaving is deliberate now — walk to the lit arch and press the key.
+    if (this.interior || this.onRoof) {
+      // Leaving is deliberate — walk to the lit arch and press the key.
       // Drifting over a tile used to teleport you out with no warning.
-      if (!onExit(this.interior, this.cam.x, this.cam.y)) {
+      if (this.interior && !onExit(this.interior, this.cam.x, this.cam.y)) {
         this.transitionLock = false;
       }
       return;
     }
 
-    // A bounded box under the arch, not a half-plane: the old test was
-    // "anywhere north of this line", which swallowed anyone who walked
-    // round to the back of the keep.
-    const inGate =
-      Math.abs(this.cam.x - KEEP_POS.x) < GATE.halfW &&
-      this.cam.y > GATE.y - GATE.trigger &&
-      this.cam.y < GATE.y + GATE.trigger;
-    if (inGate) {
-      if (!this.transitionLock) {
-        // Step back out facing away from the keep, clear of the arch.
-        this.doorstep = {
-          x: KEEP_POS.x,
-          y: GATE.doorstepY,
-          yaw: Math.PI,
-        };
-        this.interior = KEEP_INTERIOR;
-        this.cam = entryOf(KEEP_INTERIOR);
-        this.speed = 0;
-        this.transitionLock = true;
-      }
-    } else {
+    const mouth = DOORWAYS.find((door) => this.atDoor(door, door.enterAt));
+    if (!mouth) {
       this.transitionLock = false;
+      return;
     }
+    if (this.transitionLock) return;
+    // The leaves have to be clear first. This is the whole sequence the doors
+    // exist for: walk into it, watch it swing, then go in.
+    if ((this.doors.get(mouth.id) ?? 0) < DOOR_CLEAR) return;
+    const site = SITES[mouth.site];
+    if (!site) return;
+    // Step back out facing away from the building, clear of the threshold.
+    this.doorstep = { x: mouth.x, y: mouth.doorstepY, yaw: Math.PI };
+    this.returns.push({ interior: null, cam: { ...this.doorstep } });
+    this.interior = site;
+    this.cam = entryOf(site);
+    this.speed = 0;
+    this.transitionLock = true;
   }
 
   /** Name the ground she is standing on, for the panel caption. */
   private whereAmI(): string {
     if (this.onRoof) return "THE KEEP ROOF";
-    if (this.interior) {
-      return this.interior.id === "tower" ? "THE TOWER STAIR" : "THE KEEP";
-    }
+    if (this.interior) return SITE_NAMES[this.interior.id] ?? "INDOORS";
     const near = (p: { x: number; y: number }, r: number) =>
       Math.abs(this.cam.x - p.x) < r && Math.abs(this.cam.y - p.y) < r;
     if (near(KEEP_POS, 300)) return "THE KEEP";
-    if (near(VILLAGE_POS, 210)) return "THE VILLAGE";
+    if (near(VILLAGE_POS, 280)) return "THE VILLAGE";
     if (near(HENGE_POS, 260)) return "THE HENGE";
     if (near(GROVE_POS, 210)) return "THE GROVE";
     if (near(CIRCLE_POS, 160)) return "STONE CIRCLE";
@@ -683,6 +724,7 @@ export class Game {
         OMIT_ON_ROOF,
         ROOF_PLATFORM,
         this.lightning ?? undefined,
+        this.doors,
       );
       return;
     }
@@ -731,6 +773,7 @@ export class Game {
       undefined,
       undefined,
       this.lightning ?? undefined,
+      this.doors,
     );
   }
 

@@ -116,7 +116,7 @@ export interface RoomPlan {
   /** World units per cell. */
   cell: number;
   /** Which column the ley vein runs down, so the plan matches the floor. */
-  leyCellX: number;
+  leyCellX?: number;
 }
 
 export interface MapState {
@@ -431,11 +431,14 @@ function drawPlan(s: Screen, state: MapState, plan: RoomPlan): void {
   // The ley vein down the floor, the one thing she can see underfoot and on
   // the plan at the same time. It runs the open floor only — it is a light in
   // the flags, not a wire through the walls.
-  const vein = x0 + Math.round((plan.leyCellX + 0.5) * size);
-  for (let cy = 0; cy < rows; cy++) {
-    if (plan.rows[cy].charAt(plan.leyCellX) === "#") continue;
-    const { py } = cellAt(plan.leyCellX, cy);
-    for (let y = py; y < py + size; y += 2) s.px(vein, y, BC);
+  const leyCellX = plan.leyCellX;
+  if (leyCellX !== undefined) {
+    const vein = x0 + Math.round((leyCellX + 0.5) * size);
+    for (let cy = 0; cy < rows; cy++) {
+      if (plan.rows[cy].charAt(leyCellX) === "#") continue;
+      const { py } = cellAt(leyCellX, cy);
+      for (let y = py; y < py + size; y += 2) s.px(vein, y, BC);
+    }
   }
 
   for (const mark of state.marks) {
