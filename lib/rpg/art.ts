@@ -218,40 +218,80 @@ export const TREE_DEAD_PINE = foliage(
   { g: W },
 );
 
-/** Rune-carved standing stone. (7x14) */
+/**
+ * Rune-carved standing stone: a solid tapering slab, lit edge to the moon,
+ * shadow bitten out of the lee, three carved cyan runes down the face with
+ * a bright heart in the middle one. The old menhir was an outline around a
+ * black interior — on black paper, a stone-shaped hole.
+ * (9x16)
+ */
 export const MENHIR = sprite(
   [
-    "....ww.",
-    "...wkkw",
-    "..wkkkw",
-    ".wkkkkw",
-    ".wkckkw",
-    ".wkkkkw",
-    "wkkkkkw",
-    "wkckkkw",
-    "wkkkkkw",
-    "wkkkkkw",
-    "wkkckkw",
-    "wkkkkkw",
-    "wkkkkkw",
-    ".wwwww.",
+    "...WW....",
+    "...Www...",
+    "..Wwww...",
+    "..Wccwk..",
+    "..Wcwww..",
+    "..Wccwk..",
+    ".wwwwwk..",
+    ".Wwccww..",
+    ".Wwwiwwk.",
+    ".Wwccwww.",
+    ".Wwwwwwk.",
+    ".wwcwwww.",
+    "Wwwwcwwk.",
+    "Wwwcwwkk.",
+    "Wwwwwwww.",
+    ".ggkkkg..",
   ],
-  { w: W, k: K, c: C },
+  { w: W, W: BW, k: K, c: C, i: BC, g: G },
 );
 
-/** Squat tilted boulder-stone. (9x10) */
+/**
+ * The same slab where the ley runs through it: a live cyan seam wandering
+ * down the face. Serves the waymark stones standing within sight of the
+ * line, so the ley reads as a thing the stones answer to.
+ * (9x16)
+ */
+export const MENHIR_LEY = sprite(
+  [
+    "...Ww....",
+    "...Wcw...",
+    "..Wwiw...",
+    "..Wcwww..",
+    "..Wiwwk..",
+    "..Wwcww..",
+    ".Wwwiwk..",
+    ".wwwcww..",
+    ".Wwcwwww.",
+    ".Wwiwwwk.",
+    ".Wwwcwww.",
+    ".wwwiwwk.",
+    "Wwwwcwww.",
+    "Wwwcwwkk.",
+    "Wwwiwwww.",
+    ".g.ii.g..",
+  ],
+  { w: W, W: BW, k: K, c: C, i: BC, g: G },
+);
+
+/**
+ * Squat tilted boulder-stone as solid mass: lit rim, shadow clump eaten out
+ * of the lee side, one crack from the crown, turf against the base.
+ * (12x10)
+ */
 export const STONE_LEANING = sprite(
   [
-    ".ww......",
-    "wkkww....",
-    "wkkkkww..",
-    "wkkkkkkw.",
-    "wkkkkkkkw",
-    "wkkkkkkkw",
-    "wkkkkkkkw",
-    "wkkkkkkkw",
-    "wkkkkkkkw",
-    ".wwwwwww.",
+    "....WWw.....",
+    "...Wwwkww...",
+    "...Wwwwkww..",
+    "..Wwwwwkwww.",
+    "..Wwwwwwkkw.",
+    ".Wwwwwwwwkw.",
+    ".Wwwwwwkkkw.",
+    ".Wwwwwwkkww.",
+    "..Wwwwwwww..",
+    "..gg.kk.g...",
   ],
-  { w: W, k: K, c: C },
+  { w: W, W: BW, k: K, g: G },
 );

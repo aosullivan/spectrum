@@ -187,29 +187,37 @@ export const WRAITH = sprite(
 
 // ----------------------------------------------------------------- landmarks
 
-/** A dolmen — two uprights and a capstone. */
+// The far-distance stones only ever draw at four to nine pixels (closer,
+// they swap to the big sarsen art), and at that size an outline around a
+// black interior reads as a hollow zero on the horizon. They are solid pale
+// mass: a bright cap toward the moon, one dark bite low on the lee side.
+
+/** A dolmen — two solid uprights under a lit capstone. */
 export const DOLMEN = sprite(
   [
-    ".wwwwwwwww.",
-    ".wwwwwwwww.",
-    "..w.....w..",
-    ".wkw...wkw.",
-    ".wkw...wkw.",
-    ".wkw...wkw.",
-    ".wkw...wkw.",
+    "WWWWWWWWWWW",
+    "Wwwwwwwwwww",
+    ".www...www.",
+    ".wwk...wwk.",
+    ".www...www.",
+    ".wwk...wwk.",
+    ".www...www.",
   ],
-  { w: W, k: K },
+  { w: W, W: BW, k: K },
 );
 
 /** Standing stones, three sizes. */
-export const STONE_S = sprite([".w.", "wkw", "wkw", "wkw", ".w."], { w: W, k: K });
+export const STONE_S = sprite(
+  [".W.", "Www", "www", "wwk", "ww."],
+  { w: W, W: BW, k: K },
+);
 export const STONE_M = sprite(
-  [".ww.", "wkkw", "wkkw", "wkkw", "wkkw", ".ww."],
-  { w: W, k: K },
+  [".Ww.", "Wwww", "Wwww", "wwwk", "wwww", ".wwk"],
+  { w: W, W: BW, k: K },
 );
 export const STONE_L = sprite(
-  [".www.", "wkkkw", "wkkkw", "wkkkw", "wkkkw", "wkkkw", "wkkkw", ".www."],
-  { w: W, k: K },
+  ["..W..", ".Www.", "Wwwww", "Wwwww", "wwwwk", "wwwww", "wwwwk", ".wkw."],
+  { w: W, W: BW, k: K },
 );
 
 export const BOULDER = sprite(

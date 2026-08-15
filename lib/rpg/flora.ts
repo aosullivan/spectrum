@@ -296,34 +296,101 @@ export const BUSH = foliage(
 );
 
 /**
- * A mossed fallen trunk: torn butt at the near end, two snapped limbs, and
- * a splintered tip.
- *
- * Filled as mass rather than outlined. This is drawn six to twenty-five
- * pixels tall, and at that size an outline with a black interior is a hole
- * the shape of a log — the old one read as a lozenge with legs. A green body
- * with one bright edge along the top survives all the way down, because the
- * whole design is silhouette and a single highlight.
- * (30x13)
+ * Deadfall. The old log was a green slab with two hair branches — mass with
+ * nothing carved into it reads as a lozenge at every distance. Each of these
+ * three leads with a drawn feature that survives the shrink: a root plate, a
+ * ringed cut face, a splinter burst. They rotate by chunk hash so the wood
+ * gets variety instead of one repeated log; see FALLEN_LOGS.
+ */
+
+/**
+ * An oak deadfall: torn root plate at the butt, heartwood burst in its
+ * middle, a knot swelling the top line, one snapped limb, splintered tip.
+ * The wood is silvered — a green body camouflages into the greenwood's
+ * green-and-black ground mottle; pale dead wood separates the way the
+ * sarsens do, and the moss along its back keeps it of the wood.
+ * (38x16)
  */
 export const FALLEN_LOG = sprite(
   [
-    "........................gg....",
-    ".........gg............gg.....",
-    "..........gg..........gg......",
-    "..g........gg........hhhhhhhw.",
-    ".gg.........hhhhhhhhhgggggggww",
-    "ggghhhhhhhhhgggggggggkkggkgggw",
-    "gwgggggggggggkkggkkggggggggw..",
-    "gwggkkggkkggggggggggggkkk.....",
-    "gwgggggggggggggggkkkkk........",
-    "gggggggggggggkkkkk............",
-    "gggggggkkkkkk.................",
-    "gggkkkk.......................",
-    ".gg...........................",
+    "....................W.................",
+    ".....w.............WW.................",
+    "....Www............ww.................",
+    "....Wwww...........ww.................",
+    "..Wwwwwww.........ww..................",
+    "Wwwwwwwwww..ghg...ww..................",
+    ".Wwwwwwwwkggggggggggg.ghg.............",
+    ".Wwwwwwwwkwwwwwwwwwwwggggggg.g........",
+    "WwwwwWwwwkwwwwwwwwwwwwwkwwwwgggggwW...",
+    ".WwwwwwwwkwwwkkwwwwwwwkwwwwwwkkwwwwwwW",
+    ".WwwwwwwwkwwwwwwwkkwwwwwwwkwwwwwwwwwW.",
+    ".W.wwwwwwkwwwwwwwwwwwwwwwwwwwkkwww....",
+    ".Wwwwwwwwkwwwwwwwwwwkkkwwkkw...g......",
+    ".W.wwwww..wkkkwwkkwww.....gg..........",
+    "....www.w..g..........................",
+    "....w....w............................",
   ],
-  { g: G, h: BG, k: K, w: W },
+  { g: G, h: BG, k: K, w: W, W: BW },
 );
+
+/**
+ * A nurse log: end-grain rings on the cut face, shelf fungus stepping along
+ * the flank, and two saplings growing out of the dead wood.
+ * (36x16)
+ */
+export const FALLEN_LOG_NURSE = sprite(
+  [
+    "............h.......................",
+    "...........g.g........h.............",
+    "............g........g.g............",
+    "............g.........g.............",
+    "............g.........g.............",
+    "........gg..g.........g.............",
+    ".....ggggggggg.gggh...g.............",
+    "...Wwwwwwwwwwwgggggggggg.g.g........",
+    "...Wkwwwwwwwwwwwwwwwwwwwggggggggg...",
+    "..Wwwkwwwwkwwwwkwwwwwwwwwwwwwwwwww..",
+    "..Wkwkwwwwkwwwwkwwwwkwwwkwwwwkwwwww.",
+    "..WwwkwwwwwwYYYwwwwwkwwwkYYwwkwwwwww",
+    "...WkwwwwwwwwywwwYYYYwwwwwywwwwwwkkw",
+    "...Wwwwwwwwwwwwwwwyywkkwwwwkkwwwwgg.",
+    ".....wwwkkkwwwkkkwwwg...............",
+    ".......g............................",
+  ],
+  { g: G, h: BG, k: K, w: W, W: BW, y: Y, Y: BY },
+);
+
+/**
+ * A broken-back snag: the butt end propped on a stone, a white splinter
+ * burst where the trunk shattered, chips scattered under the break.
+ * (38x14)
+ */
+export const FALLEN_LOG_BROKEN = sprite(
+  [
+    "..............gwW.....................",
+    "............ggwww.....................",
+    ".........gggwwwwWW....................",
+    "........ggwwwwwwww....................",
+    ".....ghgwwwwwwww.w....................",
+    "....ggwwwwkkwwwww.....................",
+    "..ggwwwwwwwwww....gwgghggggg..........",
+    "..wwwwkkwwww......wwwwwwwwwwggggggww..",
+    "..wwwwwwww........Wwwwkkwwwwwwwkkwwk..",
+    "..wwwwww..........wwwwwwwwwkkwwwwwww..",
+    "..wWWww...........wwwwwwwwwwwwwwwwww..",
+    "..wwwwww..........wwkkwwwwkkwwwwkkww..",
+    "..wwwwww..............................",
+    "...wwkk......w...w.w..................",
+  ],
+  { g: G, h: BG, k: K, w: W, W: BW },
+);
+
+/** The deadfall family, indexed by chunk hash where logs are placed. */
+export const FALLEN_LOGS = [
+  FALLEN_LOG,
+  FALLEN_LOG_NURSE,
+  FALLEN_LOG_BROKEN,
+] as const;
 
 /**
  * Yellow caps and leaf-litter in a sparse woodland clump. Domed, lit
