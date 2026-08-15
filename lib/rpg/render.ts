@@ -12,6 +12,7 @@ import {
   textWidth,
 } from "@/lib/rpg/assets";
 import { KEEP_MID, KEEP_NEAR } from "@/lib/rpg/art";
+import { rampColour, type Ramp } from "@/lib/rpg/dither";
 import { B, BC, BW, BY, C, G, K, W } from "@/lib/rpg/palette";
 import {
   REFERENCE_HERO_BACK,
@@ -63,9 +64,24 @@ function wrapAngle(a: number): number {
 // wyrm to the left, and the keep straight up the leyline.
 const MOON_AZIMUTH = -0.72;
 
+/** Night air thickening toward the horizon. Two steps is all it needs. */
+const SKY_RAMP: Ramp = [K, B];
+
 function drawSky(s: Screen, yaw: number, dead: boolean): void {
   const scroll = Math.round(yaw * SKY_PX_PER_RAD);
   const skyline = dead ? W : G;
+  // A black sky is still a graded sky: a thin dither of blue into black low
+  // down is what stops the upper frame reading as a void. It has to stay
+  // faint — much past a fifth coverage it stops being air and becomes a
+  // painted band competing with the horizon. It goes first, so the stars and
+  // the copse sit on top of it rather than being swallowed.
+  const glowTop = HORIZON - 18;
+  for (let y = glowTop; y < HORIZON; y++) {
+    const level = ((y - glowTop) / 18) * 0.2;
+    for (let x = 0; x < SCREEN_W; x++) {
+      if (rampColour(SKY_RAMP, level, x, y) !== K) s.px(x, y, B);
+    }
+  }
   // Sparse cold stars, anchored to azimuth so they wheel as you turn.
   for (let y = 2; y < HORIZON - 3; y += 3) {
     for (let x = 0; x < SCREEN_W; x += 7) {
@@ -139,24 +155,25 @@ function drawGround(s: Screen, cam: CameraState, t: number): number[] {
     // Raising the eye pushes the same screen row further out across the
     // moor — the whole trick behind the view from the tower top.
     const z = (eyeY * FOCAL) / depth;
-    // Distance dither: detail thins as the world recedes into the dark.
-    const fade = z > 2200 ? 3 : z > 1200 ? 2 : z > 650 ? 1 : 0;
+    // Distance falloff: the ground is shaded, so the whole field simply gets
+    // darker with range and the dither thins itself out. The curve has to be
+    // gentle in z — perspective crushes the far half of the world into a few
+    // scanlines, and a linear falloff spends the entire fade in about four of
+    // them, which puts a hard edge back on the horizon.
+    const far = 1 - Math.min(1, (z / 2400) ** 0.55);
     const footprint = z / FOCAL;
     const rowBase = sy * SCREEN_W;
     for (let sx = 0; sx < SCREEN_W; sx++) {
       const l = ((sx - 128) * z) / FOCAL;
       const wx = cx + sin * z + cos * l;
       const wy = cy + cos * z - sin * l;
-      const colour = groundColour(wx, wy, footprint, t);
+      const colour = groundColour(wx, wy, footprint, t, sx, sy, far);
       if (colour === K) continue;
       // Leyline light never fades with distance and skips the clash pass.
       if (colour === BC || colour === C) {
         ley.push(rowBase + sx, colour);
         continue;
       }
-      if (fade === 1 && (sx + sy) % 2 !== 0) continue;
-      if (fade === 2 && ((sx & 3) !== 0 || (sy & 1) !== 0)) continue;
-      if (fade === 3 && (colour === G || (sx & 7) !== 0)) continue;
       s.fb[rowBase + sx] = colour;
     }
   }

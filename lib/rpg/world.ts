@@ -22,6 +22,7 @@ import {
   TREE_PINE_LIVE,
   TRILITHON,
 } from "@/lib/rpg/flora";
+import { fbm, rampColour, type Ramp } from "@/lib/rpg/dither";
 import {
   HERMITAGE_BOXES,
   HERMITAGE_POS,
@@ -88,19 +89,63 @@ const HENGE_R = 210;
 // ------------------------------------------------------------------ terrain
 
 /**
+ * Biome ground ramps, dark to light. Every one starts at black: the moor is
+ * lit by nothing but the leyline, and shadow is the ground's resting state.
+ * Steps are neighbours in tone, so a cell shaded between two of them holds
+ * exactly two colours and survives the attribute pass unaltered.
+ */
+const GROUND_RAMP: Ramp = [K, K, G, BG];
+
+/**
+ * Smooth 0..1 crossing between two world coordinates. The bands used to
+ * differ by which ramp they picked, which put a hard seam down the map where
+ * one gave way to the next — invisible when the ground was sparse marks,
+ * glaring once it is shaded. Every biome now sits on the one ramp and differs
+ * only in how far up it it sits, blended across a wide margin.
+ */
+function band(v: number, a: number, b: number): number {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * How far up its ramp the ground mat sits, and so how much of the near moor
+ * is lit at all. This is the dial between the two things the look wants at
+ * once: the design's black-dominant moor, and the density that makes dither
+ * shading read as ground rather than as scattered marks.
+ *
+ * The noise field averages 0.5, so this lands almost exactly on the fraction
+ * of near ground that takes green. It is touchy — the ramp step is a hard
+ * boundary, so 0.8 thins back out into the old line-work and 1.2 closes the
+ * mat over and hands the frame to green. Distance scales it down on top.
+ */
+const MAT_DENSITY = 1.05;
+
+/**
  * Ground colour at a world point, or K for bare dark earth.
- * The look: black dominates; green line-work and tufts; the cyan leyline
- * runs north along x=0 from spawn to the keep gate.
+ * The look: black dominates; the ground is *shaded* rather than stippled —
+ * a smooth lushness field resolved into two neighbouring ramp colours by an
+ * ordered dither. The cyan leyline runs north along x=0 to the keep gate.
  *
  * `footprint` is how many world units one screen pixel spans at this depth —
  * distant samples widen thin features (the leyline must reach the horizon)
  * and thin out point features (or they alias into noise).
+ *
+ * `sx`/`sy` are the *screen* pixel being painted. The dither threshold has to
+ * be screen-anchored, like the attribute grid: fixed to the glass while the
+ * world turns beneath it. Anchored in world space it swims and aliases as the
+ * camera rotates. `far` is the distance falloff, 1 near and 0 at the horizon;
+ * it scales the whole field, so detail thins into the dark on its own instead
+ * of needing cutoffs.
  */
 export function groundColour(
   wx: number,
   wy: number,
   footprint = 1,
   t = 0,
+  sx = 0,
+  sy = 0,
+  far = 1,
 ): number {
   const ix = Math.floor(wx);
   const iy = Math.floor(wy);
@@ -117,14 +162,9 @@ export function groundColour(
     if ((ix + iy) % 2 === 0) return B;
     return hash(ix, iy + 4242) < 60 ? BB : K;
   }
-  // --- and the living ground that rings it ---
-  if (gd < GROVE_R) {
-    const lush = hash(ix, iy + 8080);
-    if (lush < 150) return (ix + iy) % 2 === 0 ? G : BG;
-    if (lush < 175) return BG;
-  }
-
-  // --- village lane and yard: dense monochrome stipple like Wanderers ---
+  // --- village lane and yard: a swept yard, not moorland ---
+  // Bare earth with a cobble stipple, and no mat over it — the village reads
+  // as trodden ground precisely because the shading stops at its edge.
   const vx = wx - VILLAGE_POS.x;
   const vy = wy - VILLAGE_POS.y;
   const villageSquare = Math.abs(vx) < 82 && Math.abs(vy) < 138;
@@ -133,6 +173,7 @@ export function groundColour(
     const cobble = hash(ix >> 1, iy >> 1);
     if (cobble < 95 && (ix + iy) % 3 === 0) return W;
     if ((iy & 15) === 0 && (ix & 7) < 3) return W;
+    return K;
   }
 
   // --- the hermit's plot: the one bed of living green in the dead wood, and
@@ -156,7 +197,20 @@ export function groundColour(
     if (ax < core + 6.4) return hash(ix, iy) < 140 ? C : K;
   }
 
-  // --- moss patches: elliptical dithered blobs on a coarse lattice ---
+  // --- the mat: two octaves of noise dithered into a ramp ---
+  let level = (fbm(hash, wx, wy, 90) * 0.62 + fbm(hash, wx, wy, 26) * 0.38) * MAT_DENSITY;
+
+  // --- biome: dying woodland west, living greenwood east, moor between ---
+  const dead = 1 - band(wx, DEAD_WOOD_X - 130, DEAD_WOOD_X + 130);
+  const greenwood = band(wx, GREENWOOD_EDGE_X - 130, GREENWOOD_EDGE_X + 130);
+  // The greenwood lift stays small on purpose: much past this the field never
+  // dips back below the ramp's black step and the wood goes solid green.
+  level += greenwood * 0.12 - dead * 0.5;
+
+  // --- the living ground ringing the sacred pool lifts the whole field ---
+  if (gd < GROVE_R) level += 0.34 * (1 - gd / GROVE_R);
+
+  // --- moss patches: elliptical blooms on a coarse lattice ---
   const mx = Math.floor(wx / 56);
   const my = Math.floor(wy / 56);
   const mh = hash(mx, my ^ 0x55);
@@ -165,54 +219,39 @@ export function groundColour(
     const cy = my * 56 + 12 + ((mh >> 3) % 32);
     const dx = wx - cx;
     const dy = (wy - cy) * 2.6;
-    if (dx * dx + dy * dy < 230) {
-      if ((ix + iy) % 2 === 0 && hash(ix, iy + 9000) < 820) return G;
-      if (hash(ix, iy + 9100) < 8) return BG;
-    }
+    if (dx * dx + dy * dy < 230) level += 0.16;
   }
 
-  const woods = wx < WOODS_EDGE_X;
-  const greenwood = wx > GREENWOOD_EDGE_X;
-
-  // --- undergrowth: a dithered mat of living ground, laid down first ---
-  // The moor and greenwood should read as carpeted, not as bare earth with
-  // a few dashes on it. The old forest is exempt: it is dying.
-  if (!woods) {
-    const bed = hash(ix >> 1, iy >> 1);
-    const cover = greenwood ? 150 : 90;
-    if (bed < cover && (ix + iy) % 2 === 0) {
-      return bed < cover / 7 ? BG : G;
-    }
-  }
-
-  // --- and clumps of taller growth standing proud of the mat ---
-  const cell = woods ? 7 : greenwood ? 5 : 8;
-  const tx = Math.floor(wx / cell);
-  const ty = Math.floor(wy / cell);
-  const th = hash(tx, ty);
-  // The old forest is dying: barely any ground cover left under it.
-  const lively = woods ? 70 : greenwood ? 220 : 190;
-  const density = footprint > 9 ? 25 : footprint > 3 ? 90 : lively;
-  if (th < (footprint <= 3 ? lively : density)) {
-    const px = tx * cell + (th % cell);
-    const py = ty * cell + ((th >> 4) % cell);
-    const dx = ix - px;
-    const dy = iy - py;
-    const bright = th < (greenwood ? 90 : 50);
-    if (dy === 0 && dx >= -2 && dx <= 2) return bright ? BG : G;
-    if (dy === -1 && dx >= -1 && dx <= 1) return G;
-    if (dy === -2 && dx === 0) return bright ? BG : G;
+  // --- tufts standing proud, and bare scrapes worn through ---
+  // Per-pixel detail only survives close up; further out it aliases into
+  // noise, and the falloff is already thinning the field for us.
+  //
+  // This is the one part of the shading that is not attribute-cheap. The
+  // smooth field crosses at most one ramp step inside an 8x8 cell, so it
+  // leaves the clash pass almost nothing to do (measured: 18 of 608 cells
+  // over two colours). These per-pixel jumps are large enough to skip a step,
+  // which takes it to 179 of 608. It stays because the pass absorbs it
+  // invisibly — strays merge to the nearest ramp neighbour, which is a tonal
+  // nudge rather than a break — and because without it the ground shades too
+  // smoothly to read as 8-bit. Widen the jumps and that stops being true.
+  if (footprint < 3) {
+    const tuft = hash(ix, iy);
+    if (tuft < 70 + greenwood * 25) level += 0.22;
+    else if (tuft > 972) level -= 0.4;
   }
 
   // --- loose stones scattered through it ---
-  if (!woods && hash(ix >> 2, iy >> 2) < 5 && (ix & 3) < 2 && (iy & 3) < 2) {
+  if (
+    dead < 0.5 &&
+    footprint < 2.5 &&
+    hash(ix >> 2, iy >> 2) < 5 &&
+    (ix & 3) < 2 &&
+    (iy & 3) < 2
+  ) {
     return W;
   }
 
-  // --- faint world-anchored contour dashes tie the ground together ---
-  if ((iy & 31) === 0 && (ix & 7) < 3 && hash(ix >> 3, iy) < 500) return G;
-
-  return K;
+  return rampColour(GROUND_RAMP, level * far, sx, sy);
 }
 
 // ------------------------------------------------------------------ features
