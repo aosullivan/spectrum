@@ -44,6 +44,7 @@ import {
   type OverlayState,
 } from "@/lib/rpg/render";
 import { Screen } from "@/lib/rpg/screen";
+import { RADAR_RANGE, type Blip } from "@/lib/rpg/panel";
 import { paletteAt } from "@/lib/rpg/regions";
 import {
   drawAreaMap,
@@ -180,6 +181,9 @@ export class Game {
     },
   ];
 
+  /** Rewritten in place each frame by refreshPanel; the dial reads it. */
+  private readonly dialBlips: Blip[] = [];
+
   private readonly hud: HudState = {
     spellName: "WRAITHLIGHT",
     selectedRune: 0,
@@ -187,6 +191,8 @@ export class Game {
     gems: [true, true, false],
     place: "THE MOOR",
     carried: [],
+    cam: this.cam,
+    blips: this.dialBlips,
   };
 
   /** True while the area map is open; the world holds still behind it. */
@@ -560,10 +566,42 @@ export class Game {
     return "THE MOOR";
   }
 
-  /** Refresh the panel's live readouts before it is drawn. */
+  /**
+   * Refresh the panel's live readouts before it is drawn. Unlike the area
+   * map's marks, the dial's blips are wanted every frame — that is what makes
+   * it a dial and not a chart — so they are rewritten into one array rather
+   * than rebuilt, and only things within its reach are considered at all.
+   */
   private refreshPanel(): void {
     this.hud.place = this.whereAmI();
     this.hud.carried = this.carried;
+    this.hud.cam = this.cam;
+    const blips = this.dialBlips;
+    blips.length = 0;
+    if (this.interior && !this.onRoof) {
+      this.hud.plan = {
+        rows: this.interior.plan,
+        cell: CELL,
+        leyCellX: this.interior.leyCellX,
+      };
+      for (const a of this.interior.actors) {
+        if (this.taken.has(a.id) || this.enemyDeaths.has(a.id)) continue;
+        blips.push({ x: a.x, y: a.y, kind: this.markOf(a) });
+      }
+      return;
+    }
+    this.hud.plan = undefined;
+    const near = (x: number, y: number) =>
+      Math.abs(x - this.cam.x) <= RADAR_RANGE &&
+      Math.abs(y - this.cam.y) <= RADAR_RANGE;
+    for (const d of DENIZENS) {
+      if (this.enemyDeaths.has(d.id) || !near(d.x, d.y)) continue;
+      blips.push({ x: d.x, y: d.y, kind: d.hostile ? "foe" : "friend" });
+    }
+    for (const w of this.wraiths) {
+      if (this.enemyDeaths.has(w.id) || !near(w.x, w.y)) continue;
+      blips.push({ x: w.x, y: w.y, kind: "foe" });
+    }
   }
 
   /** What a thing in a room is, to the map's eye. */

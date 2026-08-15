@@ -30,7 +30,7 @@ import {
   type Billboard,
   type CameraState,
 } from "@/lib/rpg/projection";
-import { drawPanel } from "@/lib/rpg/panel";
+import { drawPanel, type Blip, type DialPlan } from "@/lib/rpg/panel";
 import { collectFaces } from "@/lib/rpg/structures";
 import { HORIZON, HUD_TOP, SCREEN_W, Screen, hash } from "@/lib/rpg/screen";
 import {
@@ -424,6 +424,12 @@ export interface HudState {
   place: string;
   /** What she is carrying. */
   carried: readonly string[];
+  /** Where she stands and which way she looks, for the corner dial. */
+  cam: { x: number; y: number; yaw: number };
+  /** What the dial marks. Refreshed each frame, in place. */
+  blips: readonly Blip[];
+  /** Set indoors; the dial draws the room instead of the moor. */
+  plan?: DialPlan;
 }
 
 /** The control panel lives in its own module. */
@@ -435,6 +441,9 @@ function drawHud(s: Screen, hud: HudState): void {
     lifeforce: hud.lifeforce,
     gems: hud.gems,
     carried: hud.carried,
+    cam: hud.cam,
+    blips: hud.blips,
+    plan: hud.plan,
   });
 }
 
